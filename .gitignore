@@ -1,0 +1,16 @@
+# Your personal files. Never commit these.
+profile.yaml
+resume.yaml
+jobs.db
+boards.json
+out/
+cache/
+.env
+*.pdf
+*.eml
+__pycache__/
+*.egg-info/
+build/
+dist/
+.venv/
+!huntline/data/boards.json

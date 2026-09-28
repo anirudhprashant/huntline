@@ -1,0 +1,53 @@
+# Your resume, as data. Tailoring only reorders what is here, it never writes new claims,
+# so put every true bullet you have and let each job pick the most relevant first.
+paper: A4          # or Letter
+max_pages: 2
+headline: Marketing Operations Specialist | CRM, Lifecycle, Automation
+summary: >-
+  Four years running CRM and lifecycle programs for e-commerce and B2B teams.
+# Optional: alternative headline + summary picked when a job matches these words.
+variants:
+  - match: [seo, content, organic, growth]
+    headline: Growth Marketing Specialist | SEO, Content, Analytics
+    summary: I grow organic traffic with technical SEO, content at scale and clear reporting.
+  - match: [crm, lifecycle, email, retention, hubspot, klaviyo]
+    headline: Lifecycle & CRM Marketing Specialist | Email, Retention, Automation
+    summary: I build lifecycle email and CRM programs and the automation that runs them.
+highlights: "**30%** repeat-purchase lift · **12,000** leads routed automatically · **5 hours** a week saved on reporting"
+
+experience:
+  - company: Example Retail Co
+    title: CRM Marketing Executive
+    dates: 2023 - Present
+    location: Toronto
+    bullets:
+      - Rebuilt the welcome and win-back email flows in Klaviyo, lifting repeat purchases **30%** in two quarters.
+      - Set up HubSpot lead scoring and routing for **12,000** inbound leads a year.
+      - Automated the weekly performance report in Looker Studio, saving **5 hours** a week.
+  - company: Sample Agency
+    title: Marketing Coordinator
+    dates: 2021 - 2023
+    location: Remote
+    bullets:
+      - Ran technical SEO audits for 14 clients and fixed crawl issues on the top 3 by traffic.
+      - Wrote and scheduled 200+ social and blog posts a year.
+
+skills:
+  CRM: HubSpot, Klaviyo, Salesforce Marketing Cloud
+  Analytics: GA4, Looker Studio, SQL basics
+  Automation: Zapier, n8n
+  SEO: Search Console, Screaming Frog, Ahrefs
+
+projects:
+  - name: Price tracker
+    text: A small Python scraper that tracks competitor prices and emails a daily summary.
+
+education:
+  - degree: BA Communications
+    school: Example University
+    dates: 2017 - 2021
+
+certifications:
+  - HubSpot Inbound Marketing, 2024
+
+additional: English (native), Spanish (conversational).

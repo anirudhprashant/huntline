@@ -1,0 +1,43 @@
+# Everything about you lives in this file and resume.yaml. Nothing personal is in the code.
+name: Sam Rivera
+email: sam.rivera@example.com
+phone: ""
+city: Toronto, Canada
+links:
+  - linkedin.com/in/example
+  - example.com
+
+search:
+  # What you'd type into a job board. Each one is searched on every source.
+  keywords:
+    - marketing operations
+    - CRM marketing
+    - lifecycle marketing
+  # A job title must contain one of these words. Leave empty to use the keywords.
+  include: []
+  # Titles containing any of these are skipped.
+  exclude: [intern, internship, director, vice president, software engineer, recruiter]
+  # canada, uk, netherlands, germany, ireland, usa, australia, india, remote
+  countries: [canada, remote]
+  # true = drop postings that refuse sponsorship, and rank employers on official
+  # government sponsor lists (UK, Netherlands, Canada) higher.
+  needs_sponsorship: false
+  # Yearly, in the local currency. Jobs that don't list a salary are always kept.
+  # Can also be per country: {canada: 60000, uk: 35000, default: 0}
+  min_salary: 0
+  max_age_days: 30
+
+# Remove any you don't want. jobspy needs: pip install 'huntline[jobspy]'
+sources: [ats, remoteok, himalayas, wwr, jobbank, adzuna, reed]
+
+# Add employer boards you care about: greenhouse, lever, ashby, smartrecruiters, workable, recruitee.
+# The slug is the company part of their jobs URL, e.g. boards.greenhouse.io/<slug>
+boards:
+  greenhouse: []
+  lever: []
+
+letter:
+  greeting: "Dear Hiring Team,"
+  signoff: "Kind regards,"
+  # One or two sentences about why you, reused in every letter and email.
+  pitch: "I run the systems behind lifecycle marketing, from CRM setup to the reporting that shows what worked."

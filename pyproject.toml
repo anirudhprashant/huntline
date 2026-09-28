@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "huntline"
+version = "0.1.0"
+description = "Find jobs that fit (visa-aware), then apply with a tailored resume, cover letter and email draft."
+readme = "README.md"
+license = "MIT"
+authors = [{name = "Anirudh Prashant"}]
+requires-python = ">=3.10"
+dependencies = ["requests>=2.28", "pyyaml>=6", "openpyxl>=3.1", "dnspython>=2.4"]
+
+[project.urls]
+Homepage = "https://github.com/anirudhprashant/huntline"
+
+[project.optional-dependencies]
+jobspy = ["python-jobspy>=1.1"]
+pdf = ["playwright>=1.40"]
+
+[project.scripts]
+huntline = "huntline.cli:main"
+
+[tool.setuptools]
+packages = ["huntline"]
+
+[tool.setuptools.package-data]
+huntline = ["data/*"]
