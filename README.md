@@ -80,7 +80,7 @@ flowchart LR
 | | |
 |---|---|
 | **Honest resumes** | Tailoring only reorders what you wrote. The most relevant bullet leads each role, and the most relevant skills come first. It never writes a claim you didn't make. |
-| **Visa aware** | Checks the UK Home Office sponsor register, the Dutch IND register and Canada's LMIA employer lists, all downloaded straight from the government sources. Canada Job Bank postings that accept applicants without a work permit are ranked first. |
+| **Visa aware** | Checks the UK Home Office sponsor register, the Dutch IND register and Canada's LMIA employer lists, all downloaded straight from the government sources. Canada Job Bank's Temporary Foreign Workers stream is searched too, immigration consultancies are dropped, and postings that accept applicants without a work permit are ranked first. |
 | **Straight from the source** | Greenhouse, Lever, Ashby, SmartRecruiters, Workable and Recruitee boards give the real employer and the full description, with no reposts. `huntline boards` finds more boards in your countries. |
 | **You stay in control** | Drafts go to your Gmail Drafts folder, or become `.eml` files. Nothing is sent, and nothing is submitted for you. |
 | **Doesn't fail silently** | If a source that usually returns results suddenly returns zero, you're told. |

@@ -194,10 +194,14 @@ def ats(p):
 JB = "https://www.jobbank.gc.ca"
 
 
-def _jobbank_list(query, pages, max_age):
+# Immigration consultancies flood the foreign-worker streams and are rarely the real employer.
+CONSULTANCY = re.compile(r"immigration|visa consult|migration serv", re.I)
+
+
+def _jobbank_list(query, pages, max_age, fsrc=16):
     out, cutoff = [], datetime.date.today() - datetime.timedelta(days=max_age)
     for pg in range(1, pages + 1):
-        r = get(f"{JB}/jobsearch/jobsearch?{query}&sort=D&fsrc=16&page={pg}")
+        r = get(f"{JB}/jobsearch/jobsearch?{query}&sort=D&fsrc={fsrc}&page={pg}")
         blocks = re.split(r'<article id="article-', r.text)[1:] if r else []
         if not blocks:
             break
@@ -211,6 +215,8 @@ def _jobbank_list(query, pages, max_age):
                 posted = datetime.date.today()
             if posted < cutoff:
                 old = True
+                continue
+            if CONSULTANCY.search(f("business")):
                 continue
             sal = f("salary").replace("Salary", "").strip()
             nums = [x.replace(",", "") for x in re.findall(r"\$([\d,]+(?:\.\d+)?)", sal)]
@@ -256,6 +262,7 @@ def jobbank(p):
         if p["search"].get("needs_sponsorship"):
             out += _jobbank_list(q + "&fskl=101010", 2, age + 15)   # LMIA requested
             out += _jobbank_list(q + "&fskl=101020", 2, age + 15)   # LMIA approved
+            out += _jobbank_list(q, 2, age + 15, fsrc=32)            # Temporary Foreign Workers stream
     return out
 
 
