@@ -67,7 +67,16 @@ def ai_body(p, r, job):
                               "messages": [{"role": "user", "content": prompt}]})
     res.raise_for_status()
     text = res.json()["choices"][0]["message"]["content"]
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+    # Models often skip blank lines. One line = one paragraph; consecutive bullets stay together.
+    out = []
+    for line in (l.strip() for l in text.splitlines()):
+        if not line:
+            continue
+        if out and not (line.startswith("- ") and out[-1].startswith("- ")):
+            out.append("")
+        out.append(line)
+    return "\n".join(out)
 
 
 def draft(p, r, job, use_ai=False):

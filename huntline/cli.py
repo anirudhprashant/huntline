@@ -64,6 +64,8 @@ def doctor(home):
     ok(bool(os.environ.get("ADZUNA_APP_ID")), "Adzuna key - optional", "free at developer.adzuna.com")
     ok(bool(os.environ.get("REED_API_KEY")), "Reed key (UK) - optional", "free at reed.co.uk/developers")
     ok(bool(os.environ.get("GMAIL_APP_PASSWORD")), "Gmail drafts - optional", "else drafts are .eml files")
+    ok(bool(os.environ.get("BRAVE_API_KEY")), "Brave Search (finds employer websites) - optional", "free at brave.com/search/api")
+    ok(bool(os.environ.get("FIRECRAWL_URL")), "Firecrawl (reads JavaScript sites) - optional", "self-host: github.com/firecrawl/firecrawl")
     ok(bool(os.environ.get("OPENAI_API_KEY")), "AI cover letters - optional", "any OpenAI-compatible key")
 
 

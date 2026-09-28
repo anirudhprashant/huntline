@@ -36,7 +36,7 @@ posting that could actually hire you rises to the top.
 You need **Python 3.10+** and **Chrome** (or Chromium, Edge or Brave).
 
 ```bash
-pipx install huntline            # or: pip install huntline
+pipx install git+https://github.com/anirudhprashant/huntline
 mkdir my-job-hunt && cd my-job-hunt
 huntline init                    # 7 quick questions
 ```
@@ -48,6 +48,59 @@ huntline scout                   # a few minutes the first time
 ```
 
 Open **`out/jobs.html`**. That's your list.
+
+## Let your AI agent set it up
+
+Using Claude Code, Codex, Cursor or another coding agent? Paste this in and it does the
+whole setup, asking you only for what it can't know.
+
+<details open>
+<summary><b>Copy this prompt</b></summary>
+
+```text
+Set up Huntline (https://github.com/anirudhprashant/huntline) for me: a local job-search
+tool that finds jobs that fit me, then makes a tailored resume, cover letter and email
+draft for each. Read its README first. Work step by step and tell me what you're doing.
+
+1. Check I have Python 3.10+ and Chrome, Chromium, Edge or Brave. Install what's missing.
+2. Install it: pipx install git+https://github.com/anirudhprashant/huntline
+   (install pipx first if needed). Create a folder ~/job-hunt and work inside it.
+3. Interview me, one question at a time: my name, email, phone (optional), city,
+   LinkedIn/portfolio links, the job titles I want, which countries I'd work in
+   (canada, uk, netherlands, germany, ireland, usa, australia, india, remote),
+   whether I need visa sponsorship, and my minimum salary per country.
+   Then run `huntline init` and edit profile.yaml with my answers.
+4. Ask me to paste my current resume or give you the file. Rewrite resume.yaml from it.
+   RULE: only facts that are in my resume. Never invent numbers, employers, tools,
+   dates or credentials. Keep every true bullet; tailoring will pick the best ones.
+   Show me the result and fix anything I flag.
+5. Offer these optional extras one at a time. Explain each in one line and skip any I decline.
+   Put the keys in ~/job-hunt/.env (see .env.example) and nowhere else.
+   - AI cover letters: a StepFun Step Plan key (cheapest good option,
+     https://platform.stepfun.ai). Set OPENAI_API_KEY=<key>,
+     OPENAI_BASE_URL=https://api.stepfun.ai/step_plan/v1, HUNTLINE_MODEL=step-3.7-flash.
+     Any other OpenAI-compatible provider also works.
+   - Better contact emails: a free Brave Search API key (https://brave.com/search/api),
+     set as BRAVE_API_KEY.
+   - JavaScript-heavy company sites: self-host Firecrawl with Docker
+     (https://github.com/firecrawl/firecrawl, `docker compose up -d`), then set
+     FIRECRAWL_URL=http://localhost:3002.
+   - Drafts straight into Gmail: a Gmail app password
+     (https://myaccount.google.com/apppasswords), set as GMAIL_ADDRESS + GMAIL_APP_PASSWORD.
+   - More job sources: free Adzuna keys (developer.adzuna.com), a Reed key for the UK, and
+     `pipx inject huntline python-jobspy` for Indeed and LinkedIn.
+6. Run `huntline doctor`, fix anything it flags, then run `huntline scout`.
+7. Open out/jobs.html and summarise my top 10 matches: title, company, score,
+   and any visa evidence.
+8. Ask if I want a daily 8am run. If yes, add a cron job (Mac/Linux) or a scheduled task
+   (Windows) that runs `huntline scout` in ~/job-hunt.
+9. Show me how to apply: `huntline resume <id>`, `huntline letter <id> [--ai]`,
+   `huntline drafts`, `huntline status <id> applied`.
+
+Never send an email or submit an application for me. Drafts only; I press send.
+```
+
+</details>
 
 ## From list to application
 
@@ -90,11 +143,13 @@ flowchart LR
 
 | Add | How |
 |---|---|
-| Indeed + LinkedIn | `pipx install "huntline[jobspy]"`, then add `jobspy` to `sources` |
+| Indeed + LinkedIn | `pipx inject huntline python-jobspy`, then add `jobspy` to `sources` |
 | Adzuna (UK, CA, NL, DE, US, AU, IN) | Free key from developer.adzuna.com, set as `ADZUNA_APP_ID` + `ADZUNA_APP_KEY` |
 | Reed (UK) | Free key from reed.co.uk/developers, set as `REED_API_KEY` |
 | Drafts straight into Gmail | A Gmail [app password](https://myaccount.google.com/apppasswords), set as `GMAIL_ADDRESS` + `GMAIL_APP_PASSWORD` |
-| AI-drafted cover letters | `huntline letter <id> --ai` with any OpenAI-compatible key: `OPENAI_API_KEY`, optionally `OPENAI_BASE_URL` + `HUNTLINE_MODEL` |
+| AI-drafted cover letters | `huntline letter <id> --ai`. Cheapest: a [StepFun Step Plan](https://platform.stepfun.ai) key with `OPENAI_BASE_URL=https://api.stepfun.ai/step_plan/v1` and `HUNTLINE_MODEL=step-3.7-flash`. Any OpenAI-compatible provider works |
+| Better contact emails | Free [Brave Search API](https://brave.com/search/api) key as `BRAVE_API_KEY`: finds the employer's real website |
+| JavaScript-heavy sites | [Self-host Firecrawl](https://github.com/firecrawl/firecrawl) and set `FIRECRAWL_URL=http://localhost:3002` |
 
 Put keys in a `.env` file in your folder (see `.env.example`). Run `huntline doctor` to
 see what's set up.
@@ -115,7 +170,7 @@ folder. Each run adds only new jobs.
 
 Your profile, resume, job database and generated files stay in your folder, and
 `.gitignore` keeps them out of git. Huntline only talks to the job sources and
-government registers listed above, plus Gmail or an AI provider if you turn those on.
+government registers listed above, plus Gmail, your AI provider, Brave Search or your own Firecrawl if you turn those on.
 
 ## Good to know
 
