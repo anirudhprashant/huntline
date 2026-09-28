@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.svg" alt="huntline: find the jobs worth your time, apply like you meant it" width="100%">
+  <img src="docs/banner.png" alt="huntline: find the jobs worth your time, apply like you meant it" width="100%">
 </p>
 
 <p align="center">
