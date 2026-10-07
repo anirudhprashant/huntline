@@ -33,7 +33,7 @@ def render(html_text, out_path):
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     # Stage next to the output, not /tmp: snap-packaged browsers cannot read /tmp.
-    with tempfile.NamedTemporaryFile("w", suffix=".html", dir=out_path.parent, delete=False) as f:
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".html", dir=out_path.parent, delete=False) as f:
         f.write(html_text)
         src = Path(f.name)
     try:

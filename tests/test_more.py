@@ -340,5 +340,32 @@ class ServeHardening(unittest.TestCase):
         self.assertIn("--port", str(e.exception))
 
 
+
+class Encoding(unittest.TestCase):
+    def test_pdf_html_is_utf8_whatever_the_system_encoding(self):
+        """Windows defaults to cp1252; Chrome reads the page as UTF-8. Simulate with an ASCII locale."""
+        import os
+        import subprocess
+        import sys
+        import textwrap
+        out = tempfile.mkdtemp()
+        script = textwrap.dedent("""
+            import sys
+            from pathlib import Path
+            from unittest import mock
+            from huntline import pdf
+            seen = {}
+            def run(cmd, **kw):
+                seen["b"] = Path(cmd[-1].removeprefix("file://")).read_bytes()
+                Path(cmd[-2].split("=", 1)[1]).write_bytes(b"%PDF" + b"x" * 3000)
+            with mock.patch.object(pdf, "browser", return_value="chrome"), mock.patch.object(pdf.subprocess, "run", run):
+                pdf.render("<p>Sam Rivera \\u00b7 \\u0141\\u00f3d\\u017a</p>", Path(sys.argv[1]) / "x.pdf")
+            sys.exit(0 if "\\u0141\\u00f3d\\u017a".encode() in seen["b"] else 3)
+        """)
+        env = {**os.environ, "LC_ALL": "C", "LANG": "C", "PYTHONCOERCECLOCALE": "0", "PYTHONUTF8": "0"}
+        r = subprocess.run([sys.executable, "-X", "utf8=0", "-c", script, out], env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr[-500:])
+
+
 if __name__ == "__main__":
     unittest.main()
