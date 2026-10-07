@@ -25,19 +25,35 @@ search:
   # Yearly, in the local currency. Jobs that don't list a salary are always kept.
   # Can also be per country: {canada: 60000, uk: 35000, default: 0}
   min_salary: 0
+  # Postings older than this are skipped, and fresh ones rank higher.
   max_age_days: 30
+  # Your years of relevant experience. Postings asking for more than this plus
+  # years_slack are skipped; slightly over is kept but noted. Leave blank to keep all.
+  years_experience:
+  years_slack: 2
 
 # Remove any you don't want. jobspy needs: pip install 'huntline[jobspy]'
-sources: [ats, remoteok, himalayas, wwr, jobbank, adzuna, reed]
+# hn = Hacker News "Who is hiring?" (mostly tech). arbeitnow = Germany and the EU.
+sources: [ats, remoteok, himalayas, wwr, jobbank, arbeitnow, remotive, jobicy, hn, adzuna, reed]
 
-# Add employer boards you care about: greenhouse, lever, ashby, smartrecruiters, workable, recruitee.
-# The slug is the company part of their jobs URL, e.g. boards.greenhouse.io/<slug>
+# Add employer boards you care about: greenhouse, lever, ashby, smartrecruiters, workable,
+# recruitee, personio, teamtailor. The slug is the company part of their jobs URL, e.g.
+# boards.greenhouse.io/<slug>, <slug>.jobs.personio.de, <slug>.teamtailor.com.
+# Workday (most large employers): paste the careers URL, e.g.
+#   https://acme.wd5.myworkdayjobs.com/en-US/External
 boards:
   greenhouse: []
   lever: []
+  workday: []
 
 letter:
   greeting: "Dear Hiring Team,"
   signoff: "Kind regards,"
   # One or two sentences about why you, reused in every letter and email.
   pitch: "I run the systems behind lifecycle marketing, from CRM setup to the reporting that shows what worked."
+
+# After each scout, ping your phone/Discord/Slack/Telegram with the best new jobs
+# (set NTFY_TOPIC, DISCORD_WEBHOOK_URL, SLACK_WEBHOOK_URL or TELEGRAM_* in .env).
+notify:
+  min_score: 60
+  top: 5

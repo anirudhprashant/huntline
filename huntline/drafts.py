@@ -71,7 +71,8 @@ def run(p, db, limit=10, ids=None, use_ai=False):
         jobs = [dict(j) for i in ids for j in db.execute("SELECT * FROM jobs WHERE id=?", (i,))]
     else:
         jobs = [dict(j) for j in db.execute(
-            "SELECT * FROM jobs WHERE status IN ('new','shortlisted') AND email != '' ORDER BY score DESC LIMIT ?", (limit,))]
+            "SELECT * FROM jobs WHERE status IN ('new','shortlisted') AND email != '' AND closed='' "
+            "ORDER BY score DESC LIMIT ?", (limit,))]
     if not jobs:
         return "No jobs with an email address to draft. Run `huntline scout` first, or pass job ids."
     msgs = []

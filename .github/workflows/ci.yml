@@ -10,9 +10,14 @@ jobs:
         env: {GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"}
   smoke:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
-      - run: pip install -e .
+        with: {python-version: "${{ matrix.python }}"}
+      - run: pip install -e . pyflakes
+      - run: python -m pyflakes huntline tests
       - run: python -m unittest discover -s tests -v

@@ -20,12 +20,10 @@ key set, a model drafts the body using only facts from your resume.yaml.
 import datetime
 import html
 import json
-import os
 import re
 from pathlib import Path
 
-import requests
-
+from .ai import chat
 from .pdf import pages, render
 from .resume import rank
 
@@ -51,23 +49,13 @@ def facts(r):
 
 
 def ai_body(p, r, job):
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
-        raise SystemExit("--ai needs OPENAI_API_KEY (any OpenAI-compatible provider; set OPENAI_BASE_URL for others)")
-    base = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     prompt = (f"Write the body of a cover letter, 180-260 words, for {p['name']} applying to '{job['title']}' "
               f"at {job['company']}.\nRULES: use ONLY facts from the resume below; never invent numbers, employers, "
               f"tools or credentials. Plain, specific, no cliches, no em dashes. Start with the greeting "
               f"'{p['letter']['greeting']}' and end with '{p['letter']['signoff']}'. You may include one list of "
               f"2-3 bullets starting with '- '. Output only the letter text.\n\n"
               f"RESUME:\n{json.dumps(r, ensure_ascii=False)[:8000]}\n\nJOB POSTING:\n{(job.get('desc') or '')[:5000]}")
-    res = requests.post(f"{base}/chat/completions", timeout=120,
-                        headers={"Authorization": f"Bearer {key}"},
-                        json={"model": os.environ.get("HUNTLINE_MODEL", "gpt-4o-mini"),
-                              "messages": [{"role": "user", "content": prompt}]})
-    res.raise_for_status()
-    text = res.json()["choices"][0]["message"]["content"]
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+    text = chat(prompt)
     # Models often skip blank lines. One line = one paragraph; consecutive bullets stay together.
     out = []
     for line in (l.strip() for l in text.splitlines()):
@@ -90,7 +78,7 @@ def draft(p, r, job, use_ai=False):
             company=job["company"], pitch=p["letter"].get("pitch", r.get("summary", "")), proof=proof)
     src = Path(p["_home"]) / "out" / "letters" / f"{slug(job['company'] + '-' + job['title'])}.txt"
     src.parent.mkdir(parents=True, exist_ok=True)
-    src.write_text(f"company: {job['company']}\nrole: {job['title']}\n---\n{body}\n")
+    src.write_text(f"company: {job['company']}\nrole: {job['title']}\n---\n{body}\n", encoding="utf-8")
     return src
 
 
@@ -100,7 +88,7 @@ def inline(s):
 
 def build(p, src):
     src = Path(src)
-    head, _, body = src.read_text().partition("\n---\n")
+    head, _, body = src.read_text(encoding="utf-8").partition("\n---\n")
     meta = {k.strip(): v.strip() for k, v in (l.split(":", 1) for l in head.splitlines() if ":" in l)}
     parts = []
     for block in re.split(r"\n\s*\n", body.strip()):
