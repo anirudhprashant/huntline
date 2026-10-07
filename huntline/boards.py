@@ -1,8 +1,9 @@
 """Finds employer job boards that have live roles in your countries.
 
-Direct ATS boards (Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Recruitee) are the
-best job source there is: the real employer, the full description, no rate limits. This
-probes company names across all six platforms and keeps the ones that answer.
+Direct ATS boards (Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Recruitee, Personio,
+Teamtailor) are the best job source there is: the real employer, the full description, no
+rate limits. This probes company names across all of them and keeps the ones that answer.
+(Workday can't be guessed from a name; paste a Workday careers URL into profile.yaml instead.)
 
     huntline boards                      probe the bundled company list
     huntline boards --companies a.txt    probe your own list, one company per line

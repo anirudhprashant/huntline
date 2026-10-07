@@ -6,6 +6,8 @@
   huntline show <id>         everything about one job
   huntline serve             the job list as a local app with working buttons
   huntline rank --ai         have a model screen your top jobs against your resume
+  huntline learn             what your shortlists and skips have taught the ranking
+  huntline prep <id>         interview prep notes for one job (--ai for likely questions)
   huntline resume <id>       resume PDF tailored to one job
   huntline letter <id>       cover letter PDF for one job (--ai to have a model draft it)
   huntline pdf <file.txt>    re-render a letter after you edit it
@@ -64,11 +66,8 @@ def doctor(home):
     ok((home / "profile.yaml").exists(), "profile.yaml", "run huntline init")
     ok((home / "resume.yaml").exists(), "resume.yaml", "run huntline init")
     ok(bool(browser()), "Chrome/Chromium for PDFs", "install Chrome, or pip install playwright")
-    try:
-        import jobspy  # noqa: F401
-        ok(True, "JobSpy (Indeed, LinkedIn)")
-    except ImportError:
-        ok(False, "JobSpy (Indeed, LinkedIn) - optional", "pip install 'huntline[jobspy]'")
+    from importlib.util import find_spec
+    ok(find_spec("jobspy") is not None, "JobSpy (Indeed, LinkedIn) - optional", "pip install 'huntline[jobspy]'")
     ok(bool(os.environ.get("ADZUNA_APP_ID")), "Adzuna key - optional", "free at developer.adzuna.com")
     ok(bool(os.environ.get("REED_API_KEY")), "Reed key (UK) - optional", "free at reed.co.uk/developers")
     ok(bool(os.environ.get("GMAIL_APP_PASSWORD")), "Gmail drafts - optional", "else drafts are .eml files")
@@ -88,11 +87,13 @@ def doctor(home):
 
 
 def job(db, jid):
-    from .store import find_id
-    full = find_id(db, jid)
-    if not full:
-        sys.exit(f"No single job matches {jid!r}. The id is the short code on each card in jobs.html.")
-    return dict(db.execute("SELECT * FROM jobs WHERE id=?", (full,)).fetchone())
+    from .store import find_ids
+    ids = find_ids(db, jid)
+    if not ids:
+        sys.exit(f"No job {jid!r}. The id is the short code on each card in jobs.html.")
+    if len(ids) > 1:
+        sys.exit(f"{jid!r} matches {len(ids)} jobs ({', '.join(ids[:5])}{'...' if len(ids) > 5 else ''}). Type more of the id.")
+    return dict(db.execute("SELECT * FROM jobs WHERE id=?", (ids[0],)).fetchone())
 
 
 def money(lo, hi):
@@ -110,15 +111,30 @@ def top(db, n=15, country=None, sort="score"):
     for r in rows:
         ai = f"ai {r['ai_fit']:>3}" if r["ai_fit"] is not None else "      "
         pay = money(r["salary_lo"], r["salary_hi"])
-        print(f"{r['id']}  {r['score']:>3}  {ai}  {r['title'][:46]:<46}  {r['company'][:24]:<24}  "
-              f"{r['country'][:10]:<10} {pay}{'  ' + r['visa'][:40] if r['visa'] else ''}")
+        print(f"{r['id']}  {r['score'] or 0:>3}  {ai}  {(r['title'] or '')[:46]:<46}  {(r['company'] or '')[:24]:<24}  "
+              f"{(r['country'] or '')[:10]:<10} {pay}{'  ' + r['visa'][:40] if r['visa'] else ''}")
+
+
+def learned(db):
+    from . import learn
+    t = learn.Taste(db)
+    if not t.ready:
+        print(f"Not enough choices to learn from yet: {t.n_like} liked (shortlisted/applied/interview/offer) and "
+              f"{t.n_skip} skipped. Huntline starts adjusting the ranking at {learn.MIN_EACH} of each.")
+    else:
+        likes, dislikes = t.top()
+        print(f"Learned from {t.n_like} jobs you liked and {t.n_skip} you skipped.")
+        print("  more like:  " + (", ".join(likes) or "nothing stands out yet"))
+        print("  less like:  " + (", ".join(dislikes) or "nothing stands out yet"))
+    n = learn.apply(db, t)
+    print(f"{n} open job scores updated." if n else "Scores are up to date.")
 
 
 def show(j):
     from .store import age_days
     age = age_days(j.get("posted"))
     print(f"{j['title']}\n{j['company']} · {j['location']} · {j['country']}")
-    for label, v in (("id", j["id"]), ("score", j["score"]), ("resume fit", f"{j.get('fit') or 0}%"),
+    for label, v in (("id", j["id"]), ("score", j["score"]), ("your taste", f"{j['taste']:+d}" if j.get("taste") else ""), ("resume fit", f"{j.get('fit') or 0}%"),
                      ("AI fit", j.get("ai_fit")), ("AI says", j.get("ai_note")), ("salary", money(j["salary_lo"], j["salary_hi"])),
                      ("posted", f"{j['posted']} ({age}d ago)" if age is not None else ""), ("visa", j["visa"]),
                      ("email", j["email"]), ("status", j["status"]), ("closed", j.get("closed")), ("note", j["note"]),
@@ -144,6 +160,10 @@ def main(argv=None):
     s = sub.add_parser("serve")
     s.add_argument("--port", type=int, default=8765)
     s.add_argument("--no-open", action="store_true")
+    sub.add_parser("learn")
+    s = sub.add_parser("prep")
+    s.add_argument("id")
+    s.add_argument("--ai", action="store_true")
     s = sub.add_parser("rank")
     s.add_argument("ids", nargs="*")
     s.add_argument("--ai", action="store_true", required=True, help="use your OpenAI-compatible model")
@@ -185,7 +205,7 @@ def main(argv=None):
     if a.cmd == "doctor":
         return doctor(home)
 
-    from . import ai, boards, drafts, letter, report, resume, scout, serve
+    from . import ai, boards, drafts, learn, letter, prep, report, resume, scout, serve
     from .profile import load, load_resume
     from .store import STATUSES, connect
     p = load(home)
@@ -203,6 +223,11 @@ def main(argv=None):
         done = ai.rank(p, db, load_resume(p), a.limit, ids, a.redo)
         report.write(p, db)
         print(f"{len(done)} jobs reviewed." if done else "Nothing to review (all your open jobs already have an AI fit; --redo to redo).")
+    elif a.cmd == "learn":
+        learned(db)
+        report.write(p, db)
+    elif a.cmd == "prep":
+        print(prep.write(p, load_resume(p), job(db, a.id), a.ai))
     elif a.cmd == "resume":
         j = job(db, a.id) if a.id else {"title": "", "desc": "", "company": "general"}
         out = home / "out" / "resumes" / f"{letter.slug(j['company'] + '-' + j['title'])}.pdf"
@@ -222,6 +247,7 @@ def main(argv=None):
             db.execute("UPDATE jobs SET status=? WHERE id=?", (status, i))
             print(f"{i} -> {status}")
         db.commit()
+        learn.apply(db)
         report.write(p, db)
     elif a.cmd == "boards":
         boards.run(p, a.companies)

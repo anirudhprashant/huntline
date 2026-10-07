@@ -32,17 +32,32 @@ def log(msg):
 
 def get(url, tries=3, **kw):
     """GET with backoff. Several boards reject bursts, so be polite."""
+    return _request("GET", url, tries, **kw)
+
+
+def post(url, body, tries=2):
+    return _request("POST", url, tries, json=body, extra={"Accept": "application/json"})
+
+
+# Answers that will not change on a retry.
+FINAL = (400, 401, 403, 404, 405, 410, 422)
+
+
+def _request(method, url, tries, extra=None, **kw):
     for i in range(tries):
+        wait = 3 * (i + 1)
         try:
-            r = requests.get(url, headers=UA, timeout=45, **kw)
+            r = requests.request(method, url, headers={**UA, **(extra or {})}, timeout=45, **kw)
             if r.ok:
                 return r
-            if r.status_code in (404, 410):
+            if r.status_code in FINAL:
                 return None
+            if r.status_code == 429 and str(r.headers.get("Retry-After", "")).isdigit():
+                wait = min(30, int(r.headers["Retry-After"]))
         except requests.RequestException as e:
-            log(f"  [get] {type(e).__name__} {url[:80]}")
+            log(f"  [{method.lower()}] {type(e).__name__} {url[:80]}")
         if i < tries - 1:
-            time.sleep(3 * (i + 1))
+            time.sleep(wait)
     return None
 
 
@@ -118,71 +133,183 @@ def wwr(p):
 
 # ---------- employer ATS boards (no key; the best source) ----------
 
+# Boards fetched with one GET by slug. `huntline boards` can probe these from a company name.
 ATS_URLS = {
     "greenhouse": "https://boards-api.greenhouse.io/v1/boards/{s}/jobs?content=true",
     "lever": "https://api.lever.co/v0/postings/{s}?mode=json",
     "ashby": "https://api.ashbyhq.com/posting-api/job-board/{s}?includeCompensation=true",
-    "smartrecruiters": "https://api.smartrecruiters.com/v1/companies/{s}/postings?limit=100",
+    "smartrecruiters": "https://api.smartrecruiters.com/v1/companies/{s}/postings?limit=100&offset={o}",
     "workable": "https://apply.workable.com/api/v1/widget/accounts/{s}?details=true",
     "recruitee": "https://{s}.recruitee.com/api/offers/",
+    "personio": "https://{s}.jobs.personio.de/xml?language=en",
+    "teamtailor": "https://{s}.teamtailor.com/jobs.rss",
 }
+# Workday needs a tenant, a data-centre and a site, so it can't be guessed from a name. Paste the
+# careers URL (https://acme.wd5.myworkdayjobs.com/en-US/External) or "acme.wd5/External" into profile.yaml.
+PLATFORMS = set(ATS_URLS) | {"workday"}
+# Boards that list every open role in one answer, so a missing job really has closed.
+FULL_BOARDS = {"greenhouse", "lever", "ashby", "smartrecruiters", "workable", "recruitee", "personio"}
+WORKDAY = re.compile(r"(?:https?://)?([\w-]+)\.(wd\d+)(?:\.myworkdayjobs\.com)?/+(?:[a-z]{2}-[A-Z]{2}/+)?([\w-]+)")
 
 
-def board(ats, slug):
-    """All postings on one employer's board, normalised."""
-    r = get(ATS_URLS[ats].format(s=slug), tries=2)
-    if not r:
-        return []
+def _json(r):
     try:
-        data = r.json()
+        return r.json() if r else None
     except ValueError:
-        return []
-    co, out = slug.replace("-", " ").title(), []
-    if ats == "greenhouse":
-        for j in data.get("jobs", []):
-            out.append(rec(title=j.get("title", ""), company=j.get("company_name") or co,
-                           location=(j.get("location") or {}).get("name", ""), url=j.get("absolute_url"),
-                           desc=text_of(html.unescape(j.get("content") or "")),
-                           posted=j.get("first_published") or j.get("updated_at")))
-    elif ats == "lever":
-        for j in data if isinstance(data, list) else []:
-            c, sr = j.get("categories") or {}, j.get("salaryRange") or {}
-            lo, hi = yearly(sr.get("min"), sr.get("max"), sr.get("interval"))
-            out.append(rec(title=j.get("text", ""), company=co,
-                           location=" / ".join(c.get("allLocations") or [c.get("location") or ""]),
-                           url=j.get("hostedUrl"), desc=j.get("descriptionPlain") or "", lo=lo, hi=hi,
-                           posted=j.get("createdAt")))
-    elif ats == "ashby":
-        for j in data.get("jobs", []):
-            comp = ((j.get("compensation") or {}).get("compensationTierSummary") or "")
-            nums = [float(a.replace(",", "")) * (1000 if k.upper() == "K" else 1)
-                    for a, k in re.findall(r"[$€£]\s?([\d,.]+)\s*([Kk]?)", comp)]
-            locs = [j.get("location") or ""] + [x.get("location", "") for x in j.get("secondaryLocations") or []]
-            out.append(rec(title=j.get("title", ""), company=co, location=" / ".join(l for l in locs if l),
-                           url=j.get("jobUrl"), desc=j.get("descriptionPlain") or "",
-                           lo=min(nums) if nums else None, hi=max(nums) if nums else None,
-                           posted=j.get("publishedAt")))
-    elif ats == "smartrecruiters":
-        for j in data.get("content", []):
+        return None
+
+
+def _greenhouse(slug, co):
+    for j in (_json(get(ATS_URLS["greenhouse"].format(s=slug), tries=2)) or {}).get("jobs", []):
+        yield rec(title=j.get("title", ""), company=j.get("company_name") or co,
+                  location=(j.get("location") or {}).get("name", ""), url=j.get("absolute_url"),
+                  desc=text_of(html.unescape(j.get("content") or "")),
+                  posted=j.get("first_published") or j.get("updated_at"))
+
+
+def _lever(slug, co):
+    data = _json(get(ATS_URLS["lever"].format(s=slug), tries=2))
+    for j in data if isinstance(data, list) else []:
+        c, sr = j.get("categories") or {}, j.get("salaryRange") or {}
+        lo, hi = yearly(sr.get("min"), sr.get("max"), sr.get("interval"))
+        yield rec(title=j.get("text", ""), company=co, location=" / ".join(c.get("allLocations") or [c.get("location") or ""]),
+                  url=j.get("hostedUrl"), desc=j.get("descriptionPlain") or "", lo=lo, hi=hi, posted=j.get("createdAt"))
+
+
+def _ashby(slug, co):
+    for j in (_json(get(ATS_URLS["ashby"].format(s=slug), tries=2)) or {}).get("jobs", []):
+        comp = ((j.get("compensation") or {}).get("compensationTierSummary") or "")
+        nums = [float(a.replace(",", "")) * (1000 if k.upper() == "K" else 1)
+                for a, k in re.findall(r"[$€£]\s?(\d[\d,]*(?:\.\d+)?)\s*([Kk]?)", comp)]
+        locs = [j.get("location") or ""] + [x.get("location", "") for x in j.get("secondaryLocations") or []]
+        yield rec(title=j.get("title", ""), company=co, location=" / ".join(l for l in locs if l), url=j.get("jobUrl"),
+                  desc=j.get("descriptionPlain") or "", lo=min(nums) if nums else None, hi=max(nums) if nums else None,
+                  posted=j.get("publishedAt"))
+
+
+def _smartrecruiters(slug, co, max_pages=10):
+    got, total = [], 0
+    for page in range(max_pages):
+        data = _json(get(ATS_URLS["smartrecruiters"].format(s=slug, o=100 * page), tries=2)) or {}
+        jobs = data.get("content") or []
+        total = data.get("totalFound") or total
+        for j in jobs:
             loc = j.get("location") or {}
-            out.append(rec(title=j.get("name", ""), company=co,
+            got.append(rec(title=j.get("name", ""), company=co, posted=j.get("releasedDate"),
                            location=" ".join(str(loc.get(k) or "") for k in ("city", "region", "country")),
-                           url=f"https://jobs.smartrecruiters.com/{slug}/{j.get('id')}", posted=j.get("releasedDate"),
+                           url=f"https://jobs.smartrecruiters.com/{slug}/{j.get('id')}",
                            detail=f"https://api.smartrecruiters.com/v1/companies/{slug}/postings/{j.get('id')}"))
-    elif ats == "workable":
-        for j in data.get("jobs", []):
-            out.append(rec(title=j.get("title", ""), company=co,
-                           location=" ".join(str(j.get(k) or "") for k in ("city", "state", "country")),
-                           url=j.get("url") or j.get("application_url"), desc=text_of(j.get("description") or ""),
-                           posted=j.get("published_on") or j.get("created_at")))
-    else:
-        for j in data.get("offers", []):
-            out.append(rec(title=j.get("title", ""), company=co,
-                           location=" ".join(str(j.get(k) or "") for k in ("city", "state_name", "country_name")),
-                           url=j.get("careers_url") or j.get("url"), desc=text_of(j.get("description") or ""),
-                           posted=j.get("published_at") or j.get("created_at")))
+        if len(jobs) < 100 or len(got) >= total:
+            break
+    if len(got) < total:                       # a giant board we only read part of: never call its jobs closed
+        for g in got:
+            g["partial"] = True
+    return got
+
+
+def _workable(slug, co):
+    for j in (_json(get(ATS_URLS["workable"].format(s=slug), tries=2)) or {}).get("jobs", []):
+        yield rec(title=j.get("title", ""), company=co, location=" ".join(str(j.get(k) or "") for k in ("city", "state", "country")),
+                  url=j.get("url") or j.get("application_url"), desc=text_of(j.get("description") or ""),
+                  posted=j.get("published_on") or j.get("created_at"))
+
+
+def _recruitee(slug, co):
+    for j in (_json(get(ATS_URLS["recruitee"].format(s=slug), tries=2)) or {}).get("offers", []):
+        yield rec(title=j.get("title", ""), company=co,
+                  location=" ".join(str(j.get(k) or "") for k in ("city", "state_name", "country_name")),
+                  url=j.get("careers_url") or j.get("url"), desc=text_of(j.get("description") or ""),
+                  posted=j.get("published_at") or j.get("created_at"))
+
+
+def _xml(r):
+    try:
+        return ET.fromstring(r.content) if r else None
+    except ET.ParseError:
+        return None
+
+
+def _personio(slug, co):
+    """Personio's public XML feed: big across Germany and the rest of Europe."""
+    root = _xml(get(ATS_URLS["personio"].format(s=slug), tries=2))
+    for pos in root.iter("position") if root is not None else []:
+        t = lambda tag: (pos.findtext(tag) or "").strip()
+        offices = [t("office")] + [(o.text or "").strip() for o in pos.findall("additionalOffices/office")]
+        desc = " ".join(f"{d.findtext('name') or ''}: {d.findtext('value') or ''}" for d in pos.iter("jobDescription"))
+        yield rec(title=t("name"), company=t("subcompany") or co, location=" / ".join(o for o in offices if o),
+                  url=f"https://{slug}.jobs.personio.de/job/{t('id')}", desc=text_of(desc), posted=t("createdAt"))
+
+
+def _teamtailor(slug, co):
+    """Teamtailor career sites publish an RSS feed of open jobs."""
+    root = _xml(get(ATS_URLS["teamtailor"].format(s=slug), tries=2))
+    for item in root.iter("item") if root is not None else []:
+        loc, remote = [], ""
+        for el in item.iter():
+            tag = el.tag.rsplit("}", 1)[-1].lower()
+            if tag in ("city", "country") and (el.text or "").strip():
+                loc.append(el.text.strip())
+            elif tag == "remotestatus" and (el.text or "").strip().lower() in ("fully", "remote", "hybrid"):
+                remote = " (Remote)" if el.text.strip().lower() != "hybrid" else " (Hybrid)"
+        yield rec(title=(item.findtext("title") or "").strip(), company=co, location=", ".join(dict.fromkeys(loc)) + remote,
+                  url=(item.findtext("link") or "").strip(), desc=text_of(item.findtext("description") or ""),
+                  posted=item.findtext("pubDate"))
+
+
+def posted_ago(text):
+    """Workday's "Posted Today" / "Posted 3 Days Ago" / "Posted 30+ Days Ago" as a date."""
+    t = (text or "").lower()
+    n = 0 if "today" in t else 1 if "yesterday" in t else None
+    if n is None and (m := re.search(r"(\d+)\+?\s*day", t)):
+        n = int(m.group(1)) + ("+" in t)
+    return (datetime.date.today() - datetime.timedelta(days=n)).isoformat() if n is not None else ""
+
+
+def _workday(slug, co, keywords=(), pages=5):
+    """Workday is keyword-searched, not read whole: big employers list thousands of roles."""
+    m = WORKDAY.match(slug.strip())
+    if not m:
+        log(f"  [workday] can't read {slug!r}; use the careers URL or tenant.wdN/site")
+        return []
+    tenant, wd, site = m.groups()
+    host = f"https://{tenant}.{wd}.myworkdayjobs.com"
+    api, out, seen = f"{host}/wday/cxs/{tenant}/{site}", [], set()
+    co = tenant.replace("-", " ").replace("_", " ").title()
+    for kw in keywords or [""]:
+        total = None
+        for page in range(pages):
+            data = _json(post(f"{api}/jobs", {"appliedFacets": {}, "limit": 20, "offset": 20 * page, "searchText": kw})) or {}
+            jobs = data.get("jobPostings") or []
+            total = data.get("total") if total is None else total     # Workday only reports the total on page one
+            for j in jobs:
+                path = j.get("externalPath") or ""
+                if not path or path in seen:
+                    continue
+                seen.add(path)
+                where = j.get("locationsText") or ""
+                out.append(rec(title=j.get("title", ""), company=co, location=where, url=f"{host}/{site}{path}",
+                               posted=posted_ago(j.get("postedOn")), detail=f"{api}{path}",
+                               vague_location=bool(re.match(r"\d+\s+locations?$", where, re.I))))
+            if len(jobs) < 20 or (total and 20 * (page + 1) >= total):
+                break
+            time.sleep(0.3)
+    return out
+
+
+PARSERS = {"greenhouse": _greenhouse, "lever": _lever, "ashby": _ashby, "smartrecruiters": _smartrecruiters,
+           "workable": _workable, "recruitee": _recruitee, "personio": _personio, "teamtailor": _teamtailor}
+
+
+def board(ats, slug, keywords=()):
+    """All postings on one employer's board, normalised and tagged with the board they came from."""
+    co = slug.replace("-", " ").title()
+    try:
+        out = list(_workday(slug, co, keywords) if ats == "workday" else PARSERS[ats](slug, co))
+    except Exception as e:        # one odd board must never sink the other thousand
+        log(f"  [{ats} {slug}] unreadable: {type(e).__name__}")
+        return []
     for o in out:
-        o["source"] = ats
+        o["source"], o["board"] = ats, f"{ats}:{slug}"
     return out
 
 
@@ -194,14 +321,18 @@ def load_boards(p):
             for ats, slugs in json.loads(f.read_text()).get("boards", {}).items():
                 boards.setdefault(ats, set()).update(slugs)
     for ats, slugs in (p.get("boards") or {}).items():
-        boards.setdefault(ats, set()).update(slugs)
+        if ats not in PLATFORMS:
+            log(f"  unknown board platform {ats!r} in profile.yaml; choose from {', '.join(sorted(PLATFORMS))}")
+            continue
+        boards.setdefault(ats, set()).update(str(s).strip() for s in (slugs or []) if str(s).strip())
     return boards
 
 
 def ats(p):
-    pairs = [(a, s) for a, slugs in load_boards(p).items() if a in ATS_URLS for s in sorted(slugs)]
+    kws = tuple(p["search"]["keywords"])
+    pairs = [(a, s) for a, slugs in load_boards(p).items() if a in PLATFORMS for s in sorted(slugs)]
     with cf.ThreadPoolExecutor(max_workers=12) as ex:
-        return [r for rs in ex.map(lambda x: board(*x), pairs) for r in rs]
+        return [r for rs in ex.map(lambda x: board(*x, kws), pairs) for r in rs]
 
 
 # ---------- Canada Job Bank (no key) ----------
@@ -282,13 +413,20 @@ def jobbank(p):
 
 
 def fetch_detail(r):
-    """Fill in the description for records that list without one (SmartRecruiters)."""
-    page = get(r.pop("detail"), tries=2)
-    try:
-        sections = ((page.json().get("jobAd") or {}).get("sections") or {}) if page else {}
-    except ValueError:
-        sections = {}
-    r["desc"] = text_of(" ".join(str((v or {}).get("text") or "") for v in sections.values()))
+    """Fill in what a listing left out (SmartRecruiters and Workday list without descriptions)."""
+    d = _json(get(r.pop("detail", ""), tries=2))
+    if not isinstance(d, dict):
+        return
+    if isinstance(d.get("jobPostingInfo"), dict):                       # Workday
+        info = d["jobPostingInfo"]
+        r["desc"] = text_of(info.get("jobDescription") or "")
+        r["posted"] = r.get("posted") or iso_date(info.get("startDate"))
+        if r.pop("vague_location", False):
+            locs = [info.get("location") or ""] + [str(x) for x in info.get("additionalLocations") or []]
+            r["location"] = " / ".join(l for l in locs if l) or r["location"]
+    else:                                                               # SmartRecruiters
+        sections = (d.get("jobAd") or {}).get("sections") or {}
+        r["desc"] = text_of(" ".join(str((v or {}).get("text") or "") for v in sections.values() if isinstance(v, dict)))
 
 
 # ---------- more free boards (no key) ----------

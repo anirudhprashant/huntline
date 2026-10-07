@@ -8,7 +8,7 @@ import html
 import json
 from pathlib import Path
 
-COLS = ["id", "found", "posted", "score", "fit", "ai_fit", "status", "title", "company", "location", "country",
+COLS = ["id", "found", "posted", "score", "taste", "fit", "ai_fit", "status", "title", "company", "location", "country",
         "salary_lo", "salary_hi", "visa", "email", "source", "url", "note", "ai_note", "closed"]
 
 
@@ -88,13 +88,13 @@ const ORDER={best:(a,b)=>b.score-a.score,ai:(a,b)=>(b.ai_fit??-1)-(a.ai_fit??-1)
 new:(a,b)=>(b.posted||b.found).localeCompare(a.posted||a.found)||b.score-a.score,pay:(a,b)=>(b.salary_hi||0)-(a.salary_hi||0)};
 function card(j){const pay=money(j.salary_lo,j.salary_hi);return `<div class="job${j.closed?" closed":""}" data-id="${esc(j.id)}"><div class="sc">${j.score}<small>score</small></div><div>
 <div class="t"><a href="${esc(j.url)}" target="_blank" rel="noopener">${esc(j.title)}</a></div>
-<div class="m">${esc(j.company)} · ${esc(j.location)}${pay?" · "+pay:""}${j.posted?" · "+ago(j.posted):""}</div>
+<div class="m">${[j.company,j.location,pay,ago(j.posted)].filter(Boolean).map(esc).join(" · ")}</div>
 <div class="tags">${j.found===latest&&!j.closed?'<span class="tag n">new</span>':""}${j.closed?'<span class="tag x">closed</span>':""}
-${j.ai_fit!=null?`<span class="tag ai">AI fit ${j.ai_fit}</span>`:""}${j.fit?`<span class="tag">resume fit ${j.fit}%</span>`:""}
+${j.ai_fit!=null?`<span class="tag ai">AI fit ${j.ai_fit}</span>`:""}${j.taste?`<span class="tag" title="Learned from what you shortlist and skip">${j.taste>0?"+":"−"}${Math.abs(j.taste)} your taste</span>`:""}${j.fit?`<span class="tag">resume fit ${j.fit}%</span>`:""}
 ${j.visa?`<span class="tag v">${esc(j.visa)}</span>`:""}${j.email?`<span class="tag e">${esc(j.email)}</span>`:""}
-<span class="tag">${esc(j.status)}</span><span class="tag">${esc(j.source)}</span><code>${esc(j.id)}</code></div>
+<span class="tag">${esc(j.status)}</span>${j.source?`<span class="tag">${esc(j.source)}</span>`:""}<code>${esc(j.id)}</code></div>
 ${j.ai_note?`<div class="why">${esc(j.ai_note)}</div>`:""}${j.note?`<div class="m">${esc(j.note)}</div>`:""}
-<div class="acts"><button data-a="resume">Resume</button><button data-a="letter">Letter</button>
+<div class="acts"><button data-a="resume">Resume</button><button data-a="letter">Letter</button><button data-a="prep">Prep</button>
 <button data-a="status" data-s="shortlisted">Shortlist</button><button data-a="status" data-s="applied">Applied</button>
 <button data-a="status" data-s="skip">Skip</button></div></div></div>`}
 function draw(){const q=$("q").value.toLowerCase(),c=$("c").value,s=$("s").value,h=$("h").checked;

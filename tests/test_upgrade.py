@@ -185,18 +185,39 @@ class Store(unittest.TestCase):
 
 
 class Closed(unittest.TestCase):
+    def setUp(self):
+        self.db = store.connect(Path(tempfile.mkdtemp()))
+
+    def add(self, co, title, src="greenhouse", board=""):
+        self.db.execute("INSERT INTO jobs (id, company, title, source, board) VALUES (?,?,?,?,?)",
+                        (store.job_id(co, title), co, title, src, board))
+
+    def closed(self):
+        return {r["title"] for r in self.db.execute("SELECT title FROM jobs WHERE closed != ''")}
+
     def test_job_missing_from_answering_board_is_closed(self):
-        home = Path(tempfile.mkdtemp())
-        db = store.connect(home)
-        for co, title, src in (("Acme", "CRM Manager", "greenhouse"), ("Acme", "SEO Lead", "greenhouse"),
-                               ("Other", "CRM Manager", "greenhouse"), ("Acme", "Email Marketer", "remoteok")):
-            db.execute("INSERT INTO jobs (id, company, title, source) VALUES (?,?,?,?)", (store.job_id(co, title), co, title, src))
-        raw = [posting(company="Acme", title="CRM Manager")]          # Acme's board answered without the SEO Lead
-        self.assertEqual(scout.mark_closed(db, raw), 1)
-        closed = {r["title"] for r in db.execute("SELECT title FROM jobs WHERE closed != ''")}
-        self.assertEqual(closed, {"SEO Lead"})                         # Other's board didn't answer; remoteok isn't a full board
-        scout.mark_closed(db, raw + [posting(company="Acme", title="SEO Lead")])
-        self.assertEqual(db.execute("SELECT COUNT(*) FROM jobs WHERE closed != ''").fetchone()[0], 0)
+        self.add("Acme", "CRM Manager", board="greenhouse:acme")
+        self.add("Acme", "SEO Lead", board="greenhouse:acme")
+        self.add("Other", "CRM Manager", board="greenhouse:other")
+        self.add("Acme", "Email Marketer", src="remoteok")
+        raw = [posting(company="Acme", title="CRM Manager", board="greenhouse:acme")]
+        self.assertEqual(scout.mark_closed(self.db, raw), 1)
+        self.assertEqual(self.closed(), {"SEO Lead"})       # Other didn't answer; remoteok isn't a full board
+        scout.mark_closed(self.db, raw + [posting(company="Acme", title="SEO Lead", board="greenhouse:acme")])
+        self.assertEqual(self.closed(), set())               # back on the board, open again
+
+    def test_jobs_saved_before_boards_were_tracked(self):
+        self.add("Acme", "SEO Lead")                         # no board column value: matched by platform + company
+        scout.mark_closed(self.db, [posting(company="Acme Inc", title="CRM Manager", board="greenhouse:acme")])
+        self.assertEqual(self.closed(), {"SEO Lead"})
+
+    def test_partial_and_searched_boards_never_close_jobs(self):
+        self.add("Big", "SEO Lead", src="smartrecruiters", board="smartrecruiters:big")
+        self.add("Huge", "SEO Lead", src="workday", board="workday:huge.wd5/ext")
+        raw = [posting(company="Big", title="CRM Manager", source="smartrecruiters", board="smartrecruiters:big",
+                       partial=True),
+               posting(company="Huge", title="CRM Manager", source="workday", board="workday:huge.wd5/ext")]
+        self.assertEqual(scout.mark_closed(self.db, raw), 0)
 
 
 class Notify(unittest.TestCase):

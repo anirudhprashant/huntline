@@ -10,6 +10,7 @@ import concurrent.futures as cf
 import json
 import os
 import re
+import time
 
 import requests
 
@@ -22,12 +23,22 @@ def chat(prompt, json_mode=False):
     body = {"model": os.environ.get("HUNTLINE_MODEL", "gpt-4o-mini"), "messages": [{"role": "user", "content": prompt}]}
     if json_mode:
         body["response_format"] = {"type": "json_object"}
-    res = requests.post(f"{base}/chat/completions", timeout=120, headers={"Authorization": f"Bearer {key}"}, json=body)
-    if res.status_code == 400 and json_mode:     # some providers reject response_format; the prompt asks for JSON anyway
-        body.pop("response_format")
-        res = requests.post(f"{base}/chat/completions", timeout=120, headers={"Authorization": f"Bearer {key}"}, json=body)
+    for attempt in range(4):
+        res = requests.post(f"{base}/chat/completions", timeout=180, headers={"Authorization": f"Bearer {key}"}, json=body)
+        if res.status_code == 400 and body.pop("response_format", None):   # provider without JSON mode: ask plainly
+            continue
+        if res.status_code in (429, 500, 502, 503, 504) and attempt < 3:     # rate limited or overloaded: back off
+            wait = res.headers.get("Retry-After", "")
+            time.sleep(min(60, int(wait)) if wait.isdigit() else 5 * 2 ** attempt)
+            continue
+        break
+    if res.status_code in (401, 403):
+        raise SystemExit(f"Your AI provider refused the key (HTTP {res.status_code}). Check OPENAI_API_KEY and OPENAI_BASE_URL.")
     res.raise_for_status()
-    text = res.json()["choices"][0]["message"]["content"] or ""
+    try:
+        text = res.json()["choices"][0]["message"]["content"] or ""
+    except (ValueError, KeyError, IndexError, TypeError):
+        raise ValueError(f"unexpected answer from {base}: {res.text[:200]}")
     return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
 
 
@@ -71,13 +82,13 @@ def rank(p, db, resume, limit=25, ids=None, redo=False, workers=4):
     def one(j):
         try:
             return j, review(resume, j)
-        except requests.RequestException as e:
+        except Exception as e:          # one bad answer skips one job, not the run
             return j, e
     done = []
     with cf.ThreadPoolExecutor(max_workers=workers) as ex:
         for j, v in ex.map(one, jobs):
             if not isinstance(v, dict):
-                print(f"  {j['id']}  skipped ({type(v).__name__ if v else 'unreadable answer'})")
+                print(f"  {j['id']}  skipped ({f'{type(v).__name__}: {str(v)[:80]}' if v else 'unreadable answer'})")
                 continue
             note = v["why"] + (f" Gap: {v['gaps']}" if v["gaps"] else "")
             db.execute("UPDATE jobs SET ai_fit=?, ai_note=? WHERE id=?", (v["fit"], note, j["id"]))

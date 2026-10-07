@@ -14,7 +14,9 @@ STOP = set("and the for with you our will role job team work this that are who h
 
 
 def words(text):
-    return {w for w in re.findall(r"[a-z][a-z0-9+#.-]{2,}", (text or "").lower()) if w not in STOP}
+    """Distinct meaningful words. Keeps "node.js" and "c++" whole; drops the full stop after "Studio."."""
+    return {w for w in (m.rstrip(".-") for m in re.findall(r"[a-z][a-z0-9+#.-]{2,}", (text or "").lower()))
+            if len(w) > 2 and w not in STOP}
 
 
 def rank(items, query, text):

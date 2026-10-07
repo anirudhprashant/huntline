@@ -31,7 +31,17 @@ def load(home=None):
         else:
             p.setdefault(k, v)
     s = p["search"]
-    s["countries"] = [c.lower().strip() for c in s["countries"]]
+    for k in ("keywords", "include", "exclude", "countries"):
+        s[k] = as_list(s.get(k))
+    p["sources"] = as_list(p.get("sources"))
+    s["countries"] = [c.lower() for c in s["countries"]]
+    from .countries import COUNTRIES
+    bad = [c for c in s["countries"] if c not in COUNTRIES]
+    if bad:
+        sys.exit(f"profile.yaml: unknown countries {bad}; choose from {', '.join(COUNTRIES)}")
+    for k in ("max_age_days", "years_experience", "years_slack"):
+        if s.get(k) is not None and not isinstance(s[k], (int, float)):
+            sys.exit(f"profile.yaml: search.{k} should be a number, not {s[k]!r}")
     if not s["include"]:
         s["include"] = [w for kw in s["keywords"] for w in kw.lower().split() if len(w) > 2]
     p["_home"] = str(home)
@@ -39,6 +49,15 @@ def load(home=None):
     if p["search"]["max_age_days"] is None:
         p["search"]["max_age_days"] = 3650
     return p
+
+
+def as_list(v):
+    """`countries: canada, uk` and `countries: [canada, uk]` both mean a list."""
+    if v is None:
+        return []
+    if isinstance(v, str):
+        v = v.split(",")
+    return [str(x).strip() for x in v if str(x).strip()]
 
 
 def load_resume(p):

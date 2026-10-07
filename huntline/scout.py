@@ -6,10 +6,10 @@ from pathlib import Path
 
 import yaml
 
-from . import emails, notify, report
+from . import emails, learn, notify, report
 from .countries import COUNTRIES, NEG_ANY, POS_ANY, country_of
 from .match import Fit, years_required
-from .sources import ATS_URLS, SOURCES, fetch_detail, jobbank_detail, log
+from .sources import FULL_BOARDS, SOURCES, fetch_detail, jobbank_detail, log
 from .sponsors import Sponsors, norm_co
 from .store import age_days, connect, job_id, today
 
@@ -45,6 +45,9 @@ def evaluate(p, r, sponsors, inc, exc, kw, fit=None):
     if not inc.search(r["title"]) or (exc and exc.search(r["title"])):
         return None
     country = "canada" if r["source"] == "jobbank" else country_of(r["location"], s["countries"])
+    if not country and r.get("vague_location") and r.get("detail"):    # "3 Locations": ask the posting where
+        fetch_detail(r)
+        country = country_of(r["location"], s["countries"])
     if not country:
         return None
     posted = r.get("posted") or ""
@@ -89,7 +92,8 @@ def evaluate(p, r, sponsors, inc, exc, kw, fit=None):
             "company": r["company"][:80], "location": r["location"][:80], "country": country, "url": r["url"],
             "source": r["source"], "salary_lo": r["lo"], "salary_hi": r["hi"], "score": max(0, min(score, 100)),
             "tier": tier, "visa": visa, "note": note, "email": "", "desc": desc[:6000],
-            "posted": posted, "last_seen": today(), "fit": fit_pct}
+            "posted": posted, "last_seen": today(), "fit": fit_pct, "board": r.get("board", ""),
+            "base": max(0, min(score, 100)), "taste": 0}
 
 
 def fetch_all(p, names):
@@ -113,13 +117,21 @@ def fetch_all(p, names):
 
 
 def mark_closed(db, raw):
-    """An ATS board lists every open role, so a job missing from a board that answered has closed."""
+    """A full ATS board lists every open role, so a job missing from a board that answered has closed.
+
+    Only boards read completely count: a failed fetch, a keyword-searched Workday or a giant board
+    read in part never closes anything."""
     seen = {job_id(r["company"], r["title"]) for r in raw}
-    boards = {(r["source"], norm_co(r["company"])) for r in raw if r["source"] in ATS_URLS}
+    full = [r for r in raw if r["source"] in FULL_BOARDS and r.get("board")]
+    partial = {r["board"] for r in full if r.get("partial")}
+    boards = {r["board"] for r in full} - partial
+    # Jobs saved before 0.2 have no board, so fall back to platform + company for those.
+    legacy = {(r["source"], norm_co(r["company"])) for r in full if r["board"] not in partial}
     db.executemany("UPDATE jobs SET last_seen=?, closed='' WHERE id=?", [(today(), i) for i in seen])
-    gone = [r["id"] for r in db.execute("SELECT id, source, company FROM jobs WHERE closed='' AND "
+    gone = [r["id"] for r in db.execute("SELECT id, source, company, board FROM jobs WHERE closed='' AND "
                                         "status NOT IN ('skip','rejected')")
-            if r["id"] not in seen and (r["source"], norm_co(r["company"])) in boards]
+            if r["id"] not in seen and (r["board"] in boards if r["board"]
+                                        else (r["source"], norm_co(r["company"])) in legacy)]
     db.executemany("UPDATE jobs SET closed=? WHERE id=?", [(today(), i) for i in gone])
     return len(gone)
 
@@ -152,6 +164,7 @@ def run(p, only=None, find_emails=20):
                        "best=max(best, excluded.best), ts=excluded.ts", (name, n, today()))
 
     closed = mark_closed(db, raw)
+    taste = learn.Taste(db)
     known = {r["id"] for r in db.execute("SELECT id FROM jobs")}
     fresh = {}
     for r in sorted(raw, key=lambda r: r["source"] != "jobbank"):   # Job Bank records are richest, let them win
@@ -160,6 +173,8 @@ def run(p, only=None, find_emails=20):
             continue
         row = evaluate(p, r, sponsors, inc, exc, kw, fit)
         if row:
+            row["taste"] = taste.of(row)
+            row["score"] = max(0, min(100, row["base"] + row["taste"]))
             fresh[jid] = row
 
     ranked = sorted(fresh.values(), key=lambda x: -x["score"])
@@ -171,6 +186,7 @@ def run(p, only=None, find_emails=20):
         db.execute(f"INSERT OR IGNORE INTO jobs ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
                    [row[c] for c in cols])
     db.commit()
+    learn.apply(db, taste)
     out = report.write(p, db)
     log(f"\n{len(ranked)} new matching jobs from {len(raw)} postings."
         + (f" {closed} jobs you saw before have closed." if closed else ""))

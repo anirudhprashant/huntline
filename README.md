@@ -98,9 +98,13 @@ draft for each. Read its README first. Work step by step and tell me what you're
    and any visa evidence.
 8. Ask if I want a daily 8am run. If yes, add a cron job (Mac/Linux) or a scheduled task
    (Windows) that runs `huntline scout` in ~/job-hunt.
-9. If I set up an AI key, run `huntline rank --ai` and show me `huntline top --sort ai`.
-10. Show me how to apply: `huntline serve` (click-to-apply list), `huntline resume <id>`,
-   `huntline letter <id> [--ai]`, `huntline drafts`, `huntline status <id> applied`.
+9. Ask which big employers I'd love to work at. For any on Workday, add their careers URL
+   (https://<name>.wdN.myworkdayjobs.com/...) under boards.workday in profile.yaml.
+10. If I set up an AI key, run `huntline rank --ai` and show me `huntline top --sort ai`.
+11. Show me how to apply: `huntline serve` (click-to-apply list), `huntline resume <id>`,
+   `huntline letter <id> [--ai]`, `huntline drafts`, `huntline status <id> applied`,
+   and `huntline prep <id>` before an interview. Tell me that shortlisting and skipping
+   jobs teaches the ranking what I like (`huntline learn` shows what it learned).
 
 Never send an email or submit an application for me. Drafts only; I press send.
 ```
@@ -118,6 +122,8 @@ huntline resume a1b2c3d0         # resume PDF tailored to that job
 huntline letter a1b2c3d0         # one-page cover letter PDF
 huntline drafts                  # email drafts for your top 10, both PDFs attached
 huntline status a1b2c3d0 applied # track it
+huntline prep a1b2c3d0           # interview notes: their asks, your proof, your gaps
+huntline learn                   # what your shortlists and skips taught the ranking
 ```
 
 <p align="center">
@@ -129,9 +135,9 @@ huntline status a1b2c3d0 applied # track it
 
 ```mermaid
 flowchart LR
-  A["1,100 employer boards<br/>RemoteOK · Himalayas · WWR · Remotive · Jobicy<br/>Arbeitnow · HN Who's Hiring<br/>Job Bank · Adzuna · Reed · Indeed · LinkedIn"] --> B["Filter<br/>title · location · salary · age<br/>years required · aggregators · reposts"]
+  A["1,100 employer boards + Workday<br/>RemoteOK · Himalayas · WWR · Remotive · Jobicy<br/>Arbeitnow · HN Who's Hiring<br/>Job Bank · Adzuna · Reed · Indeed · LinkedIn"] --> B["Filter<br/>title · location · salary · age<br/>years required · aggregators · reposts"]
   B --> C["Visa check<br/>refusals dropped<br/>UK · NL · CA sponsor lists"]
-  C --> D["Score and rank<br/>resume fit · freshness<br/>optional AI screen"]
+  C --> D["Score and rank<br/>resume fit · freshness<br/>your taste · AI screen"]
   D --> E["jobs.html + CSV"]
   E --> F["Tailored resume<br/>Cover letter<br/>Email draft"]
   F --> G(("You press send"))
@@ -143,7 +149,9 @@ flowchart LR
 |---|---|
 | **Honest resumes** | Tailoring only reorders what you wrote. The most relevant bullet leads each role, and the most relevant skills come first. It never writes a claim you didn't make. |
 | **Visa aware** | Checks the UK Home Office sponsor register, the Dutch IND register and Canada's LMIA employer lists, all downloaded straight from the government sources. Canada Job Bank's Temporary Foreign Workers stream is searched too, immigration consultancies are dropped, and postings that accept applicants without a work permit are ranked first. |
-| **Straight from the source** | Greenhouse, Lever, Ashby, SmartRecruiters, Workable and Recruitee boards give the real employer and the full description, with no reposts. `huntline boards` finds more boards in your countries. |
+| **Straight from the source** | Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Recruitee, Personio and Teamtailor boards give the real employer and the full description, with no reposts. `huntline boards` finds more boards in your countries. Paste any Workday careers URL into `profile.yaml` to search the big employers too. |
+| **Learns what you like** | Every shortlist and skip teaches it. After a few of each, open jobs like the ones you go for move up (by at most 10 points), and the kind you skip move down. `huntline learn` shows exactly what it picked up. |
+| **Interview-ready** | `huntline prep <id>` pulls the requirements out of the posting and pairs each with your strongest real bullet. Where your resume has no answer, it says so, so the gap doesn't surprise you in the room. |
 | **You stay in control** | Drafts go to your Gmail Drafts folder, or become `.eml` files. Nothing is sent, and nothing is submitted for you. |
 | **Ranks by you, not keywords** | Each posting is scored against your resume: the tools you list that it names, and how much of your experience it shares. Fresh postings rank higher, stale ones are dropped, and roles asking for far more years than you have are skipped. `huntline rank --ai` adds a recruiter-style screen with the reason and the biggest gap. |
 | **Knows when a job is gone** | Employer boards list every open role, so when a job you saw disappears from a board that still answers, it's marked closed and kept out of your drafts. |

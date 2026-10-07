@@ -36,11 +36,15 @@ search:
 # hn = Hacker News "Who is hiring?" (mostly tech). arbeitnow = Germany and the EU.
 sources: [ats, remoteok, himalayas, wwr, jobbank, arbeitnow, remotive, jobicy, hn, adzuna, reed]
 
-# Add employer boards you care about: greenhouse, lever, ashby, smartrecruiters, workable, recruitee.
-# The slug is the company part of their jobs URL, e.g. boards.greenhouse.io/<slug>
+# Add employer boards you care about: greenhouse, lever, ashby, smartrecruiters, workable,
+# recruitee, personio, teamtailor. The slug is the company part of their jobs URL, e.g.
+# boards.greenhouse.io/<slug>, <slug>.jobs.personio.de, <slug>.teamtailor.com.
+# Workday (most large employers): paste the careers URL, e.g.
+#   https://acme.wd5.myworkdayjobs.com/en-US/External
 boards:
   greenhouse: []
   lever: []
+  workday: []
 
 letter:
   greeting: "Dear Hiring Team,"
