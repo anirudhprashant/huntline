@@ -1,8 +1,10 @@
 """Job sources. Each returns a list of plain dicts:
 
-    title, company, location, url, desc, lo, hi, source, (optional) open, lmia, note
+    title, company, location, url, desc, lo, hi, source, posted, (optional) open, lmia, note, detail
 
-lo/hi are yearly salary in the posting's currency, or None. No source needs a paid key;
+lo/hi are yearly salary in the posting's currency, or None. posted is YYYY-MM-DD or ''.
+detail is an API URL holding the full description, fetched only for jobs that pass the
+title and location filters, so boards that list without descriptions stay cheap. No source needs a paid key;
 Adzuna and Reed are used only when their free keys are set in the environment.
 """
 import concurrent.futures as cf
@@ -17,6 +19,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import requests
+
+from .store import iso_date
 
 UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128 Safari/537.36",
       "Accept-Language": "en;q=0.9"}
@@ -37,7 +41,8 @@ def get(url, tries=3, **kw):
                 return None
         except requests.RequestException as e:
             log(f"  [get] {type(e).__name__} {url[:80]}")
-        time.sleep(3 * (i + 1))
+        if i < tries - 1:
+            time.sleep(3 * (i + 1))
     return None
 
 
@@ -60,8 +65,10 @@ def yearly(lo, hi, interval="year"):
 
 
 def rec(**kw):
-    base = {"title": "", "company": "", "location": "", "url": "", "desc": "", "lo": None, "hi": None, "source": ""}
+    base = {"title": "", "company": "", "location": "", "url": "", "desc": "", "lo": None, "hi": None, "source": "",
+            "posted": ""}
     base.update(kw)
+    base["posted"] = iso_date(base["posted"])
     return base
 
 
@@ -74,7 +81,8 @@ def remoteok(p):
         if isinstance(j, dict) and j.get("position"):
             out.append(rec(title=j["position"], company=j.get("company", ""), location=j.get("location") or "Remote",
                            url=j.get("url", ""), desc=text_of(j.get("description", "")),
-                           lo=j.get("salary_min") or None, hi=j.get("salary_max") or None, source="remoteok"))
+                           lo=j.get("salary_min") or None, hi=j.get("salary_max") or None, source="remoteok",
+                           posted=j.get("epoch") or j.get("date")))
     return out
 
 
@@ -87,7 +95,7 @@ def himalayas(p, pages=5):
             out.append(rec(title=j.get("title", ""), company=j.get("companyName", ""),
                            location=", ".join(j.get("locationRestrictions") or []) or "Remote",
                            url=j.get("applicationLink", ""), desc=text_of(j.get("description") or j.get("excerpt", "")),
-                           lo=j.get("minSalary"), hi=j.get("maxSalary"), source="himalayas"))
+                           lo=j.get("minSalary"), hi=j.get("maxSalary"), source="himalayas", posted=j.get("pubDate")))
         if len(jobs) < 100:
             break
         offset += 100
@@ -104,7 +112,7 @@ def wwr(p):
         t = lambda tag: (item.findtext(tag) or "").strip()
         company, _, role = t("title").partition(":")
         out.append(rec(title=role.strip() or t("title"), company=company.strip(), location=t("region") or "Remote",
-                       url=t("link"), desc=text_of(t("description")), source="wwr"))
+                       url=t("link"), desc=text_of(t("description")), source="wwr", posted=t("pubDate")))
     return out
 
 
@@ -132,15 +140,18 @@ def board(ats, slug):
     co, out = slug.replace("-", " ").title(), []
     if ats == "greenhouse":
         for j in data.get("jobs", []):
-            out.append(rec(title=j.get("title", ""), company=co, location=(j.get("location") or {}).get("name", ""),
-                           url=j.get("absolute_url"), desc=text_of(html.unescape(j.get("content") or ""))))
+            out.append(rec(title=j.get("title", ""), company=j.get("company_name") or co,
+                           location=(j.get("location") or {}).get("name", ""), url=j.get("absolute_url"),
+                           desc=text_of(html.unescape(j.get("content") or "")),
+                           posted=j.get("first_published") or j.get("updated_at")))
     elif ats == "lever":
         for j in data if isinstance(data, list) else []:
             c, sr = j.get("categories") or {}, j.get("salaryRange") or {}
             lo, hi = yearly(sr.get("min"), sr.get("max"), sr.get("interval"))
             out.append(rec(title=j.get("text", ""), company=co,
                            location=" / ".join(c.get("allLocations") or [c.get("location") or ""]),
-                           url=j.get("hostedUrl"), desc=j.get("descriptionPlain") or "", lo=lo, hi=hi))
+                           url=j.get("hostedUrl"), desc=j.get("descriptionPlain") or "", lo=lo, hi=hi,
+                           posted=j.get("createdAt")))
     elif ats == "ashby":
         for j in data.get("jobs", []):
             comp = ((j.get("compensation") or {}).get("compensationTierSummary") or "")
@@ -149,23 +160,27 @@ def board(ats, slug):
             locs = [j.get("location") or ""] + [x.get("location", "") for x in j.get("secondaryLocations") or []]
             out.append(rec(title=j.get("title", ""), company=co, location=" / ".join(l for l in locs if l),
                            url=j.get("jobUrl"), desc=j.get("descriptionPlain") or "",
-                           lo=min(nums) if nums else None, hi=max(nums) if nums else None))
+                           lo=min(nums) if nums else None, hi=max(nums) if nums else None,
+                           posted=j.get("publishedAt")))
     elif ats == "smartrecruiters":
         for j in data.get("content", []):
             loc = j.get("location") or {}
             out.append(rec(title=j.get("name", ""), company=co,
                            location=" ".join(str(loc.get(k) or "") for k in ("city", "region", "country")),
-                           url=f"https://jobs.smartrecruiters.com/{slug}/{j.get('id')}"))
+                           url=f"https://jobs.smartrecruiters.com/{slug}/{j.get('id')}", posted=j.get("releasedDate"),
+                           detail=f"https://api.smartrecruiters.com/v1/companies/{slug}/postings/{j.get('id')}"))
     elif ats == "workable":
         for j in data.get("jobs", []):
             out.append(rec(title=j.get("title", ""), company=co,
                            location=" ".join(str(j.get(k) or "") for k in ("city", "state", "country")),
-                           url=j.get("url") or j.get("application_url"), desc=text_of(j.get("description") or "")))
+                           url=j.get("url") or j.get("application_url"), desc=text_of(j.get("description") or ""),
+                           posted=j.get("published_on") or j.get("created_at")))
     else:
         for j in data.get("offers", []):
             out.append(rec(title=j.get("title", ""), company=co,
                            location=" ".join(str(j.get(k) or "") for k in ("city", "state_name", "country_name")),
-                           url=j.get("careers_url") or j.get("url"), desc=text_of(j.get("description") or "")))
+                           url=j.get("careers_url") or j.get("url"), desc=text_of(j.get("description") or ""),
+                           posted=j.get("published_at") or j.get("created_at")))
     for o in out:
         o["source"] = ats
     return out
@@ -223,7 +238,7 @@ def _jobbank_list(query, pages, max_age, fsrc=16):
             lo, hi = yearly(nums[0] if nums else None, nums[-1] if nums else None, sal)
             direct = "Direct Apply" in f("appmethod")
             out.append(rec(title=f("noctitle"), company=f("business"), location=f("location").replace("Location", "").strip(),
-                           url=f"{JB}/jobsearch/jobposting/{jid}", lo=lo, hi=hi, source="jobbank",
+                           url=f"{JB}/jobsearch/jobposting/{jid}", lo=lo, hi=hi, source="jobbank", posted=posted.isoformat(),
                            note="Direct Apply needs a Job Bank account; try the employer's site or email" if direct else ""))
         if old:
             break
@@ -266,6 +281,114 @@ def jobbank(p):
     return out
 
 
+def fetch_detail(r):
+    """Fill in the description for records that list without one (SmartRecruiters)."""
+    page = get(r.pop("detail"), tries=2)
+    try:
+        sections = ((page.json().get("jobAd") or {}).get("sections") or {}) if page else {}
+    except ValueError:
+        sections = {}
+    r["desc"] = text_of(" ".join(str((v or {}).get("text") or "") for v in sections.values()))
+
+
+# ---------- more free boards (no key) ----------
+
+def arbeitnow(p, pages=5):
+    """Germany and the EU, many English-speaking roles and many that sponsor."""
+    if not {"germany", "netherlands", "ireland", "uk", "remote"} & set(p["search"]["countries"]):
+        return []
+    out = []
+    for pg in range(1, pages + 1):
+        r = get(f"https://www.arbeitnow.com/api/job-board-api?page={pg}")
+        try:
+            jobs = (r.json().get("data") if r else None) or []
+        except ValueError:
+            jobs = []
+        for j in jobs:
+            loc = j.get("location") or ""
+            if j.get("remote"):
+                loc = f"{loc} (Remote)" if loc else "Remote"
+            tags = " ".join(j.get("tags") or [])
+            out.append(rec(title=j.get("title", ""), company=j.get("company_name", ""), location=loc,
+                           url=j.get("url", ""), desc=f"{text_of(j.get('description', ''))} {tags}",
+                           source="arbeitnow", posted=j.get("created_at")))
+        if not jobs:
+            break
+        time.sleep(0.5)
+    return out
+
+
+def remotive(p):
+    if "remote" not in p["search"]["countries"]:
+        return []
+    out = []
+    for kw in p["search"]["keywords"]:
+        r = get("https://remotive.com/api/remote-jobs", params={"search": kw, "limit": 100})
+        try:
+            jobs = (r.json().get("jobs") if r else None) or []
+        except ValueError:
+            jobs = []
+        for j in jobs:
+            out.append(rec(title=j.get("title", ""), company=j.get("company_name", ""),
+                           location=f"{j.get('candidate_required_location') or ''} Remote".strip(),
+                           url=j.get("url", ""), desc=text_of(j.get("description", "")), source="remotive",
+                           posted=j.get("publication_date")))
+        time.sleep(1)
+    return out
+
+
+def jobicy(p):
+    if "remote" not in p["search"]["countries"]:
+        return []
+    out = []
+    for kw in p["search"]["keywords"]:
+        r = get("https://jobicy.com/api/v2/remote-jobs", params={"count": 50, "tag": kw})
+        try:
+            jobs = (r.json().get("jobs") if r else None) or []
+        except ValueError:
+            jobs = []
+        for j in jobs:
+            geo = j.get("jobGeo") or ""
+            out.append(rec(title=html.unescape(j.get("jobTitle") or ""), company=html.unescape(j.get("companyName") or ""),
+                           location=f"{'' if geo.lower() == 'anywhere' else geo} Remote".strip(), url=j.get("url", ""),
+                           desc=text_of(j.get("jobDescription") or j.get("jobExcerpt") or ""), source="jobicy",
+                           lo=j.get("annualSalaryMin"), hi=j.get("annualSalaryMax"), posted=j.get("pubDate")))
+        time.sleep(1)
+    return out
+
+
+ROLE = re.compile(r"engineer|developer|manager|designer|scientist|analyst|lead|head of|director|architect|"
+                  r"specialist|marketing|product|sales|writer|researcher|ops|operations|devops|sre|consultant", re.I)
+
+
+def hn_post(text, item_id, created):
+    """One "Company | Role | Location | ..." comment from the monthly Who's Hiring thread."""
+    first = text_of((text or "").split("<p>")[0])
+    parts = [x.strip() for x in first.split("|") if x.strip()]
+    if len(parts) < 2 or len(first) > 300:
+        return None
+    title = next((x for x in parts[1:] if ROLE.search(x)), parts[1])
+    return rec(title=title, company=parts[0], location=" ".join(parts[1:]),
+               url=f"https://news.ycombinator.com/item?id={item_id}", desc=text_of(text), source="hn", posted=created)
+
+
+def hn(p):
+    """Hacker News "Who is hiring?" - startups posting directly, mostly tech."""
+    r = get("https://hn.algolia.com/api/v1/search_by_date",
+            params={"tags": "story,author_whoishiring", "query": "who is hiring", "hitsPerPage": 5})
+    try:
+        story = next((h for h in (r.json().get("hits") if r else []) if "hiring" in (h.get("title") or "").lower()), None)
+        thread = get(f"https://hn.algolia.com/api/v1/items/{story['objectID']}").json() if story else {}
+    except (ValueError, AttributeError):
+        thread = {}
+    out = []
+    for c in thread.get("children") or []:
+        job = hn_post(c.get("text"), c.get("id"), c.get("created_at"))
+        if job:
+            out.append(job)
+    return out
+
+
 # ---------- keyed but free ----------
 
 def adzuna(p):
@@ -286,7 +409,7 @@ def adzuna(p):
                 predicted = str(j.get("salary_is_predicted")) == "1"
                 out.append(rec(title=j.get("title") or "", company=(j.get("company") or {}).get("display_name") or "",
                                location=(j.get("location") or {}).get("display_name") or "", url=j.get("redirect_url"),
-                               desc=j.get("description") or "", source="adzuna",
+                               desc=j.get("description") or "", source="adzuna", posted=j.get("created"),
                                lo=None if predicted else j.get("salary_min"), hi=None if predicted else j.get("salary_max")))
     return out
 
@@ -306,7 +429,8 @@ def reed(p):
         for j in res:
             out.append(rec(title=j.get("jobTitle", ""), company=j.get("employerName", ""), location=j.get("locationName", ""),
                            url=j.get("jobUrl"), desc=j.get("jobDescription", ""), lo=j.get("minimumSalary"),
-                           hi=j.get("maximumSalary"), source="reed"))
+                           hi=j.get("maximumSalary"), source="reed",
+                           posted="-".join(reversed(str(j.get("date") or "").split("/")))))
     return out
 
 
@@ -336,9 +460,10 @@ def jobspy(p):
                     lo, hi = yearly(g("min_amount"), g("max_amount"), g("interval"))
                     out.append(rec(title=str(g("title") or ""), company=str(g("company") or ""),
                                    location=str(g("location") or ""), url=g("job_url"), desc=str(g("description") or ""),
-                                   lo=lo, hi=hi, source=site))
+                                   lo=lo, hi=hi, source=site, posted=str(g("date_posted") or "")))
     return out
 
 
 SOURCES = {"ats": ats, "remoteok": remoteok, "himalayas": himalayas, "wwr": wwr, "jobbank": jobbank,
+           "arbeitnow": arbeitnow, "remotive": remotive, "jobicy": jobicy, "hn": hn,
            "adzuna": adzuna, "reed": reed, "jobspy": jobspy}

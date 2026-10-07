@@ -47,7 +47,8 @@ Put your real experience into `resume.yaml`. Then:
 huntline scout                   # a few minutes the first time
 ```
 
-Open **`out/jobs.html`**. That's your list.
+Open **`out/jobs.html`**. That's your list. Or run `huntline serve` to use it as a local
+app, where one click shortlists a job or builds its resume and cover letter.
 
 ## Let your AI agent set it up
 
@@ -68,7 +69,8 @@ draft for each. Read its README first. Work step by step and tell me what you're
 3. Interview me, one question at a time: my name, email, phone (optional), city,
    LinkedIn/portfolio links, the job titles I want, which countries I'd work in
    (canada, uk, netherlands, germany, ireland, usa, australia, india, remote),
-   whether I need visa sponsorship, and my minimum salary per country.
+   whether I need visa sponsorship, my minimum salary per country, and my years of
+   relevant experience (search.years_experience).
    Then run `huntline init` and edit profile.yaml with my answers.
 4. Ask me to paste my current resume or give you the file. Rewrite resume.yaml from it.
    RULE: only facts that are in my resume. Never invent numbers, employers, tools,
@@ -89,13 +91,16 @@ draft for each. Read its README first. Work step by step and tell me what you're
      (https://myaccount.google.com/apppasswords), set as GMAIL_ADDRESS + GMAIL_APP_PASSWORD.
    - More job sources: free Adzuna keys (developer.adzuna.com), a Reed key for the UK, and
      `pipx inject huntline python-jobspy` for Indeed and LinkedIn.
+   - Phone alerts for great new matches: pick a private topic name for the ntfy app
+     (https://ntfy.sh) and set NTFY_TOPIC, or a Discord/Slack webhook or Telegram bot.
 6. Run `huntline doctor`, fix anything it flags, then run `huntline scout`.
 7. Open out/jobs.html and summarise my top 10 matches: title, company, score,
    and any visa evidence.
 8. Ask if I want a daily 8am run. If yes, add a cron job (Mac/Linux) or a scheduled task
    (Windows) that runs `huntline scout` in ~/job-hunt.
-9. Show me how to apply: `huntline resume <id>`, `huntline letter <id> [--ai]`,
-   `huntline drafts`, `huntline status <id> applied`.
+9. If I set up an AI key, run `huntline rank --ai` and show me `huntline top --sort ai`.
+10. Show me how to apply: `huntline serve` (click-to-apply list), `huntline resume <id>`,
+   `huntline letter <id> [--ai]`, `huntline drafts`, `huntline status <id> applied`.
 
 Never send an email or submit an application for me. Drafts only; I press send.
 ```
@@ -105,6 +110,10 @@ Never send an email or submit an application for me. Drafts only; I press send.
 ## From list to application
 
 ```bash
+huntline top                     # best open matches in the terminal
+huntline show a1b2               # one job in full (ids can be shortened, like git)
+huntline rank --ai               # a model screens your top 25 against your resume
+huntline serve                   # the list as a local app with working buttons
 huntline resume a1b2c3d0         # resume PDF tailored to that job
 huntline letter a1b2c3d0         # one-page cover letter PDF
 huntline drafts                  # email drafts for your top 10, both PDFs attached
@@ -120,9 +129,9 @@ huntline status a1b2c3d0 applied # track it
 
 ```mermaid
 flowchart LR
-  A["1,100 employer boards<br/>RemoteOK · Himalayas · WWR<br/>Job Bank · Adzuna · Reed · Indeed · LinkedIn"] --> B["Filter<br/>title · location · salary<br/>aggregators · reposts"]
+  A["1,100 employer boards<br/>RemoteOK · Himalayas · WWR · Remotive · Jobicy<br/>Arbeitnow · HN Who's Hiring<br/>Job Bank · Adzuna · Reed · Indeed · LinkedIn"] --> B["Filter<br/>title · location · salary · age<br/>years required · aggregators · reposts"]
   B --> C["Visa check<br/>refusals dropped<br/>UK · NL · CA sponsor lists"]
-  C --> D["Score and rank"]
+  C --> D["Score and rank<br/>resume fit · freshness<br/>optional AI screen"]
   D --> E["jobs.html + CSV"]
   E --> F["Tailored resume<br/>Cover letter<br/>Email draft"]
   F --> G(("You press send"))
@@ -136,6 +145,8 @@ flowchart LR
 | **Visa aware** | Checks the UK Home Office sponsor register, the Dutch IND register and Canada's LMIA employer lists, all downloaded straight from the government sources. Canada Job Bank's Temporary Foreign Workers stream is searched too, immigration consultancies are dropped, and postings that accept applicants without a work permit are ranked first. |
 | **Straight from the source** | Greenhouse, Lever, Ashby, SmartRecruiters, Workable and Recruitee boards give the real employer and the full description, with no reposts. `huntline boards` finds more boards in your countries. |
 | **You stay in control** | Drafts go to your Gmail Drafts folder, or become `.eml` files. Nothing is sent, and nothing is submitted for you. |
+| **Ranks by you, not keywords** | Each posting is scored against your resume: the tools you list that it names, and how much of your experience it shares. Fresh postings rank higher, stale ones are dropped, and roles asking for far more years than you have are skipped. `huntline rank --ai` adds a recruiter-style screen with the reason and the biggest gap. |
+| **Knows when a job is gone** | Employer boards list every open role, so when a job you saw disappears from a board that still answers, it's marked closed and kept out of your drafts. |
 | **Doesn't fail silently** | If a source that usually returns results suddenly returns zero, you're told. |
 | **Nothing to sign up for** | No account, no server, no paid API. Everything optional stays optional. |
 
@@ -150,6 +161,8 @@ flowchart LR
 | AI-drafted cover letters | `huntline letter <id> --ai`. Cheapest: a [StepFun Step Plan](https://platform.stepfun.ai) key with `OPENAI_BASE_URL=https://api.stepfun.ai/step_plan/v1` and `HUNTLINE_MODEL=step-3.7-flash`. Any OpenAI-compatible provider works |
 | Better contact emails | Free [Brave Search API](https://brave.com/search/api) key as `BRAVE_API_KEY`: finds the employer's real website |
 | JavaScript-heavy sites | [Self-host Firecrawl](https://github.com/firecrawl/firecrawl) and set `FIRECRAWL_URL=http://localhost:3002` |
+| AI fit screening | `huntline rank --ai` with the same key as AI letters. Scores, reasons and gaps show up in `jobs.html` and `huntline top --sort ai` |
+| Alerts after each run | `NTFY_TOPIC` (the free [ntfy](https://ntfy.sh) phone app), `DISCORD_WEBHOOK_URL`, `SLACK_WEBHOOK_URL`, or `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`. Tune with `notify: {min_score, top}` in profile.yaml |
 
 Put keys in a `.env` file in your folder (see `.env.example`). Run `huntline doctor` to
 see what's set up.
@@ -164,13 +177,16 @@ crontab -e
 ```
 
 On Windows, use Task Scheduler: program `huntline`, arguments `scout`, start in your
-folder. Each run adds only new jobs.
+folder. Each run adds only new jobs. Set up an alert channel (above) and the best new
+matches land on your phone with your morning coffee.
 
 ## Privacy
 
 Your profile, resume, job database and generated files stay in your folder, and
 `.gitignore` keeps them out of git. Huntline only talks to the job sources and
-government registers listed above, plus Gmail, your AI provider, Brave Search or your own Firecrawl if you turn those on.
+government registers listed above, plus Gmail, your AI provider, Brave Search, your own Firecrawl
+or your alert channel if you turn those on. `huntline serve` listens on 127.0.0.1 only and
+needs a per-session token for every action.
 
 ## Good to know
 

@@ -9,10 +9,13 @@ HOME = Path(os.environ.get("HUNTLINE_HOME", Path.cwd()))
 
 DEFAULTS = {
     "search": {"keywords": [], "include": [], "exclude": [], "countries": ["remote"],
-               "needs_sponsorship": False, "min_salary": 0, "max_age_days": 30},
-    "sources": ["ats", "remoteok", "himalayas", "wwr", "jobbank", "adzuna", "reed"],
+               "needs_sponsorship": False, "min_salary": 0, "max_age_days": 30,
+               "years_experience": None, "years_slack": 2},
+    "sources": ["ats", "remoteok", "himalayas", "wwr", "jobbank", "arbeitnow", "remotive", "jobicy", "hn",
+                "adzuna", "reed"],
     "boards": {},
     "letter": {"greeting": "Dear Hiring Team,", "signoff": "Kind regards,"},
+    "notify": {"min_score": 0, "top": 5},
 }
 
 
@@ -33,6 +36,8 @@ def load(home=None):
         s["include"] = [w for kw in s["keywords"] for w in kw.lower().split() if len(w) > 2]
     p["_home"] = str(home)
     (home / "out").mkdir(exist_ok=True)
+    if p["search"]["max_age_days"] is None:
+        p["search"]["max_age_days"] = 3650
     return p
 
 

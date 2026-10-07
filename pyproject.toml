@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "huntline"
-version = "0.1.0"
+version = "0.2.0"
 description = "Find jobs that fit (visa-aware), then apply with a tailored resume, cover letter and email draft."
 readme = "README.md"
 license = "MIT"
