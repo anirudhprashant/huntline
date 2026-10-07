@@ -78,7 +78,7 @@ def draft(p, r, job, use_ai=False):
             company=job["company"], pitch=p["letter"].get("pitch", r.get("summary", "")), proof=proof)
     src = Path(p["_home"]) / "out" / "letters" / f"{slug(job['company'] + '-' + job['title'])}.txt"
     src.parent.mkdir(parents=True, exist_ok=True)
-    src.write_text(f"company: {job['company']}\nrole: {job['title']}\n---\n{body}\n")
+    src.write_text(f"company: {job['company']}\nrole: {job['title']}\n---\n{body}\n", encoding="utf-8")
     return src
 
 
@@ -88,7 +88,7 @@ def inline(s):
 
 def build(p, src):
     src = Path(src)
-    head, _, body = src.read_text().partition("\n---\n")
+    head, _, body = src.read_text(encoding="utf-8").partition("\n---\n")
     meta = {k.strip(): v.strip() for k, v in (l.split(":", 1) for l in head.splitlines() if ":" in l)}
     parts = []
     for block in re.split(r"\n\s*\n", body.strip()):

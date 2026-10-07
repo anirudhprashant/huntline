@@ -24,7 +24,7 @@ def load(home=None):
     f = home / "profile.yaml"
     if not f.exists():
         sys.exit(f"No profile.yaml in {home}. Run: huntline init")
-    p = yaml.safe_load(f.read_text()) or {}
+    p = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
     for k, v in DEFAULTS.items():
         if isinstance(v, dict):
             p[k] = {**v, **(p.get(k) or {})}
@@ -64,4 +64,4 @@ def load_resume(p):
     f = Path(p["_home"]) / "resume.yaml"
     if not f.exists():
         sys.exit(f"No resume.yaml in {p['_home']}. Run: huntline init")
-    return yaml.safe_load(f.read_text())
+    return yaml.safe_load(f.read_text(encoding="utf-8"))

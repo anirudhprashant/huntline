@@ -26,11 +26,11 @@ def page(p, db, token=""):
 def write(p, db):
     out = Path(p["_home"]) / "out"
     out.mkdir(exist_ok=True)
-    with open(out / "jobs.csv", "w", newline="") as f:
+    with open(out / "jobs.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=COLS, extrasaction="ignore")
         w.writeheader()
         w.writerows(rows(db))
-    (out / "jobs.html").write_text(page(p, db))
+    (out / "jobs.html").write_text(page(p, db), encoding="utf-8")
     return out / "jobs.html"
 
 

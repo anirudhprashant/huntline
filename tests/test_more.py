@@ -161,11 +161,11 @@ class Ids(unittest.TestCase):
 class Profile(unittest.TestCase):
     def test_forgiving_lists_and_clear_errors(self):
         home = Path(tempfile.mkdtemp())
-        (home / "profile.yaml").write_text("search:\n  keywords: crm, lifecycle\n  countries: Canada, UK\n")
+        (home / "profile.yaml").write_text("search:\n  keywords: crm, lifecycle\n  countries: Canada, UK\n", encoding="utf-8")
         p = profile.load(home)
         self.assertEqual(p["search"]["countries"], ["canada", "uk"])
         self.assertEqual(p["search"]["keywords"], ["crm", "lifecycle"])
-        (home / "profile.yaml").write_text("search:\n  keywords: [crm]\n  countries: [canda]\n")
+        (home / "profile.yaml").write_text("search:\n  keywords: [crm]\n  countries: [canda]\n", encoding="utf-8")
         with self.assertRaises(SystemExit) as e:
             profile.load(home)
         self.assertIn("canda", str(e.exception))
@@ -248,7 +248,7 @@ class Prep(unittest.TestCase):
     def test_write_and_ai_section(self):
         with mock.patch("huntline.ai.chat", return_value="### Why CRM?\n- Because Klaviyo."):
             out = prep.write(self.p, self.r, self.job, use_ai=True)
-        text = out.read_text()
+        text = out.read_text(encoding="utf-8")
         self.assertTrue(out.name.endswith(".md") and out.parent.name == "prep")
         self.assertIn("AI draft, check every claim", text)
 

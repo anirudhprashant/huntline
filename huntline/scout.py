@@ -144,7 +144,7 @@ def run(p, only=None, find_emails=20):
     inc, exc, kw = words_re(s["include"]), words_re(s["exclude"]), words_re(s["keywords"])
     sponsors = Sponsors(p["_home"], s["countries"]) if s.get("needs_sponsorship") else Sponsors(p["_home"], [])
     rf = Path(p["_home"]) / "resume.yaml"
-    fit = Fit(yaml.safe_load(rf.read_text()) if rf.exists() else {})
+    fit = Fit(yaml.safe_load(rf.read_text(encoding="utf-8")) if rf.exists() else {})
 
     names = []
     for name in only or p["sources"]:

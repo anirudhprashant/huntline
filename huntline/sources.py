@@ -318,7 +318,7 @@ def load_boards(p):
     boards = {}
     for f in (Path(__file__).parent / "data" / "boards.json", Path(p["_home"]) / "boards.json"):
         if f.exists():
-            for ats, slugs in json.loads(f.read_text()).get("boards", {}).items():
+            for ats, slugs in json.loads(f.read_text(encoding="utf-8")).get("boards", {}).items():
                 boards.setdefault(ats, set()).update(slugs)
     for ats, slugs in (p.get("boards") or {}).items():
         if ats not in PLATFORMS:

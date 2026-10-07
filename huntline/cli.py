@@ -40,7 +40,7 @@ def init(home):
     if (home / "profile.yaml").exists():
         sys.exit(f"{home / 'profile.yaml'} already exists. Edit it directly.")
     print("A few questions. Press Enter to accept the default. You can change everything later in profile.yaml.\n")
-    p = yaml.safe_load((EXAMPLES / "profile.example.yaml").read_text())
+    p = yaml.safe_load((EXAMPLES / "profile.example.yaml").read_text(encoding="utf-8"))
     p["name"] = ask("Your full name", p["name"])
     p["email"] = ask("Email", p["email"])
     p["phone"] = ask("Phone (optional)", "")
@@ -54,7 +54,7 @@ def init(home):
     p["search"]["needs_sponsorship"] = ask("Do you need visa sponsorship? (y/n)", "n").lower().startswith("y")
     yrs = ask("Years of relevant experience (skips jobs asking for far more; blank to keep all)", "")
     p["search"]["years_experience"] = int(yrs) if yrs.isdigit() else None
-    (home / "profile.yaml").write_text(yaml.safe_dump(p, sort_keys=False, allow_unicode=True))
+    (home / "profile.yaml").write_text(yaml.safe_dump(p, sort_keys=False, allow_unicode=True), encoding="utf-8")
     shutil.copy(EXAMPLES / "resume.example.yaml", home / "resume.yaml")
     print(f"\nWrote {home / 'profile.yaml'} and {home / 'resume.yaml'}.")
     print("Next: put your real experience into resume.yaml (it's the only source of truth), then run: huntline scout")
@@ -78,7 +78,7 @@ def doctor(home):
        "Notifications after each scout - optional", "NTFY_TOPIC, DISCORD_WEBHOOK_URL, SLACK_WEBHOOK_URL or TELEGRAM_*")
     if (home / "profile.yaml").exists():
         import yaml
-        prof = yaml.safe_load((home / "profile.yaml").read_text()) or {}
+        prof = yaml.safe_load((home / "profile.yaml").read_text(encoding="utf-8")) or {}
         ok((prof.get("search") or {}).get("years_experience") is not None, "search.years_experience - optional",
            "set it to drop postings that ask for far more years than you have")
         from .sources import SOURCES
@@ -193,7 +193,7 @@ def main(argv=None):
     home = Path(a.home or os.environ.get("HUNTLINE_HOME") or Path.cwd()).expanduser().resolve()
     env = home / ".env"
     if env.exists():
-        for line in env.read_text().splitlines():
+        for line in env.read_text(encoding="utf-8").splitlines():
             k, _, v = line.partition("=")
             if k.strip() and not k.startswith("#") and v.strip():
                 os.environ.setdefault(k.strip(), v.strip().strip("\"'"))

@@ -26,9 +26,9 @@ def probe(ats, slug, where):
 def run(p, companies_file=None, workers=16):
     names = set()
     if companies_file:
-        names = {l.strip() for l in Path(companies_file).read_text().splitlines() if l.strip()}
+        names = {l.strip() for l in Path(companies_file).read_text(encoding="utf-8").splitlines() if l.strip()}
     else:
-        bundled = json.loads((Path(__file__).parent / "data" / "boards.json").read_text())["boards"]
+        bundled = json.loads((Path(__file__).parent / "data" / "boards.json").read_text(encoding="utf-8"))["boards"]
         names = {s for v in bundled.values() for s in v}
     slugs = sorted({re.sub(r"[^a-z0-9-]", "", n.lower().replace(" ", "")) for n in names} - {""})
     where = loc_regex(p["search"]["countries"])
@@ -43,5 +43,5 @@ def run(p, companies_file=None, workers=16):
     for h in best.values():
         out.setdefault(h["ats"], []).append(h["slug"])
     f = Path(p["_home"]) / "boards.json"
-    f.write_text(json.dumps({"boards": {k: sorted(v) for k, v in out.items()}}, indent=1))
+    f.write_text(json.dumps({"boards": {k: sorted(v) for k, v in out.items()}}, indent=1), encoding="utf-8")
     print(f"{len(best)} boards with {sum(h['hits'] for h in best.values())} roles in your countries -> {f}")

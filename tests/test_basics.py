@@ -14,10 +14,10 @@ DATA = Path(profile.__file__).parent / "data"
 class Basics(unittest.TestCase):
     def setUp(self):
         self.home = Path(tempfile.mkdtemp())
-        p = yaml.safe_load((DATA / "profile.example.yaml").read_text())
+        p = yaml.safe_load((DATA / "profile.example.yaml").read_text(encoding="utf-8"))
         p["search"]["needs_sponsorship"] = True
-        (self.home / "profile.yaml").write_text(yaml.safe_dump(p))
-        (self.home / "resume.yaml").write_text((DATA / "resume.example.yaml").read_text())
+        (self.home / "profile.yaml").write_text(yaml.safe_dump(p), encoding="utf-8")
+        (self.home / "resume.yaml").write_text((DATA / "resume.example.yaml").read_text(encoding="utf-8"), encoding="utf-8")
         self.p = profile.load(self.home)
 
     def test_remote_tied_to_other_country_is_dropped(self):

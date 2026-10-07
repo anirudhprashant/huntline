@@ -36,10 +36,10 @@ class Resp:
 
 def make_home(**search):
     home = Path(tempfile.mkdtemp())
-    p = yaml.safe_load((DATA / "profile.example.yaml").read_text())
+    p = yaml.safe_load((DATA / "profile.example.yaml").read_text(encoding="utf-8"))
     p["search"].update(search)
-    (home / "profile.yaml").write_text(yaml.safe_dump(p))
-    (home / "resume.yaml").write_text((DATA / "resume.example.yaml").read_text())
+    (home / "profile.yaml").write_text(yaml.safe_dump(p), encoding="utf-8")
+    (home / "resume.yaml").write_text((DATA / "resume.example.yaml").read_text(encoding="utf-8"), encoding="utf-8")
     return profile.load(home)
 
 
@@ -75,7 +75,7 @@ class Matching(unittest.TestCase):
         self.assertIsNone(years_required(""))
 
     def test_resume_fit(self):
-        f = Fit(yaml.safe_load((DATA / "resume.example.yaml").read_text()))
+        f = Fit(yaml.safe_load((DATA / "resume.example.yaml").read_text(encoding="utf-8")))
         self.assertIn("sql", f.tools)                       # "SQL basics" keeps the tool, drops the qualifier
         good = f.score("Own lifecycle email in Klaviyo and HubSpot, report in GA4 and Looker Studio.")
         bad = f.score("Senior Java engineer for distributed systems on Kubernetes and Kafka.")
@@ -266,7 +266,7 @@ class EndToEnd(unittest.TestCase):
                 mock.patch.object(scout.notify, "channels", return_value=[]), mock.patch.object(scout, "log"):
             ranked = scout.run(p, ["fake"])
         self.assertEqual([r["title"] for r in ranked], ["CRM Marketing Manager"])
-        page = (Path(p["_home"]) / "out" / "jobs.html").read_text()
+        page = (Path(p["_home"]) / "out" / "jobs.html").read_text(encoding="utf-8")
         self.assertIn("CRM Marketing Manager", page)
         self.assertIn('TOKEN=""', page)                               # static file: buttons copy commands
         jid = ranked[0]["id"]
@@ -282,7 +282,7 @@ class Serve(unittest.TestCase):
         db = store.connect(self.p["_home"])
         db.execute("INSERT INTO jobs (id, title, company, status) VALUES ('j1','CRM Manager','Acme','new')")
         db.commit()
-        (Path(self.p["_home"]) / "secret.txt").write_text("private")
+        (Path(self.p["_home"]) / "secret.txt").write_text("private", encoding="utf-8")
         self.token = "t0ken"
         from http.server import ThreadingHTTPServer
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), serve.handler(self.p, self.token))

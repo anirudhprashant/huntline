@@ -31,13 +31,13 @@ def norm_co(name):
 def _cached(home, name, fetch, min_size):
     f = Path(home) / "cache" / f"sponsors_{name}.json"
     f.parent.mkdir(parents=True, exist_ok=True)
-    cache = json.loads(f.read_text()) if f.exists() else {}
+    cache = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
     if time.time() - cache.get("ts", 0) < WEEK:
         return set(cache["names"])
     try:
         names = fetch()
         if len(names) >= min_size:      # far fewer means the page changed shape; keep the old list
-            f.write_text(json.dumps({"ts": time.time(), "names": sorted(names)}))
+            f.write_text(json.dumps({"ts": time.time(), "names": sorted(names)}), encoding="utf-8")
             return names
         print(f"  [sponsors {name}] only {len(names)} parsed, using cache", file=sys.stderr)
     except Exception as e:

@@ -7,6 +7,7 @@ Requests whose Host isn't 127.0.0.1 or localhost are refused, which stops DNS-re
 from reading that page.
 """
 import json
+import os
 import secrets
 from contextlib import closing
 import webbrowser
@@ -107,10 +108,15 @@ def handler(p, token):
     return H
 
 
+class Server(ThreadingHTTPServer):
+    # On Windows SO_REUSEADDR lets a second process bind a port that is already in use.
+    allow_reuse_address = os.name != "nt"
+
+
 def run(p, port=8765, open_browser=True):
     token = secrets.token_urlsafe(18)
     try:
-        srv = ThreadingHTTPServer(("127.0.0.1", port), handler(p, token))
+        srv = Server(("127.0.0.1", port), handler(p, token))
     except OSError as e:
         raise SystemExit(f"Can't listen on port {port} ({e.strerror}). Try: huntline serve --port {port + 1}")
     url = f"http://127.0.0.1:{srv.server_address[1]}/"

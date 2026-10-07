@@ -170,5 +170,5 @@ def write(p, resume, job, use_ai=False):
         text += "\n" + ai_section(p, resume, job)
     out = Path(p["_home"]) / "out" / "prep" / f"{slug(job['company'] + '-' + job['title'])}.md"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(text)
+    out.write_text(text, encoding="utf-8")
     return out
